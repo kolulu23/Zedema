@@ -1,0 +1,41 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Zedema: Create Workshop Item",
+            "type": "shell",
+            "detail": "Create a new workshop item from the template",
+            "command": "./scripts/create_workshop.sh \"${input:workshopName}\" \"${input:initialModId}\"",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Zedema: Deploy Workshop Item",
+            "type": "shell",
+            "detail": "Deploy a whole workshop item to the local Zomboid Workshop folder",
+            "command": "./scripts/deploy_workshop.sh \"${input:workshopName}\"",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "workshopName",
+            "type": "promptString",
+            "description": "Enter the workshop item name:",
+            "default": "MyExampleWorkshop"
+        },
+        {
+            "id": "initialModId",
+            "type": "promptString",
+            "description": "Enter the initial mod id inside the workshop item:",
+            "default": "MyExampleMod"
+        }
+    ]
+}
