@@ -120,6 +120,16 @@ You can quickly generate a new workshop item using the official community templa
 
 This creates `MyExampleWorkshop` at the workspace root from `pzmc-template`, renames the initial placeholder mod folder to `MyExampleMod`, and updates `workshop.txt` plus the template `mod.info` files.
 
+### Adding Another Mod to a Workshop Item
+
+You can add more mods to an existing workshop item using the same template mod skeleton:
+
+```bash
+./scripts/add_mod.sh "MyExampleWorkshop" MySecondMod
+```
+
+This copies `pzmc-template/Contents/mods/YOUR_MOD_HERE` into `MyExampleWorkshop/Contents/mods/MySecondMod` and updates the new mod's `mod.info` files.
+
 ### Running Mods in Game
 
 1. **Deploy a Workshop Item**: Use the deploy script to copy a whole workshop item into the local Zomboid Workshop cache. It uses `ZED_CACHE_DIR` from `.env` when set, or falls back to `~/Zomboid`.
