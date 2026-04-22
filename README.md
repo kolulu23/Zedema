@@ -133,10 +133,12 @@ This copies `pzmc-template/Contents/mods/YOUR_MOD_HERE` into `MyExampleWorkshop/
 ### Running Mods in Game
 
 1. **Deploy a Workshop Item**: Use the deploy script to copy a whole workshop item into the local Zomboid Workshop cache. It uses `ZED_CACHE_DIR` from `.env` when set, or falls back to `~/Zomboid`.
+
    ```bash
-  ./scripts/deploy_workshop.sh "MyExampleWorkshop"
+   ./scripts/deploy_workshop.sh "MyExampleWorkshop"
    ```
-  This deploys the entire directory to `Zomboid/Workshop/<title-from-workshop.txt>/`, including `Contents/mods/`, `workshop.txt`, and `preview.png`.
+
+   This deploys the entire directory to `Zomboid/Workshop/<title-from-workshop.txt>/`, including `Contents/mods/`, `workshop.txt`, and `preview.png`.
 2. Enable the mod in-game via the Mod menu.
 3. Use `-debug` [startup parameter](https://pzwiki.net/wiki/Startup_parameters) for debug mode.
 
