@@ -1,4 +1,6 @@
 # Decompiled source code for reference only
 zombie/
 .env
+.DS_Store
 tmp/
+examples/
