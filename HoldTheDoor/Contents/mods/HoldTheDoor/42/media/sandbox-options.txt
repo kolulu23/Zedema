@@ -1,0 +1,19 @@
+VERSION = 1,
+
+option HoldTheDoor.HPMultiplier {
+    type = double,
+    min = 1.5,
+    max = 10.0,
+    default = 3.0,
+    page = HoldTheDoor,
+    translation = Sandbox_HoldTheDoor_HPMultiplier,
+},
+
+option HoldTheDoor.StumbleDuration {
+    type = double,
+    min = 0.5,
+    max = 5.0,
+    default = 2.0,
+    page = HoldTheDoor,
+    translation = Sandbox_HoldTheDoor_StumbleDuration,
+},
