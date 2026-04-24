@@ -68,7 +68,7 @@ function HoldTheDoorServer.OnGameStart()
     local numPlayers = getNumActivePlayers()
     for i = 0, numPlayers - 1 do
         local player = getSpecificPlayer(i)
-        if player then
+        if player and player:hasModData() then
             HoldTheDoor.clearPlayerModData(player)
         end
     end

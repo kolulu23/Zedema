@@ -50,9 +50,6 @@ function HoldTheDoorAction:start()
     -- Face the door
     self.character:faceThisObject(self.door)
 
-    -- Set animation — placeholder; swap for custom anim later
-    self:setActionAnim("Shove")
-
     -- Read current HP before modification
     self.originalHealth = self.door:getHealth()
     self.originalMaxHealth = self.door:getMaxHealth()
@@ -72,15 +69,14 @@ function HoldTheDoorAction:start()
     doorMD[HoldTheDoor.Keys.ORIGINAL_MAX_HP] = self.originalMaxHealth
 
     -- Tag the player
-    self.character:getModData()[HoldTheDoor.Keys.PLAYER_HOLDING] = true
+    if self.character:hasModData() then
+        self.character:getModData()[HoldTheDoor.Keys.PLAYER_HOLDING] = true
+    end
 end
 
 function HoldTheDoorAction:update()
     -- Keep facing the door while holding
     self.character:faceThisObject(self.door)
-
-    -- Force the action to stay active (reset progress so it never completes on its own)
-    self:setActionAnim("Shove")
 end
 
 function HoldTheDoorAction:stop()
@@ -102,13 +98,17 @@ function HoldTheDoorAction:restoreDoor()
 
     local door = self.door
     if door == nil then
-        HoldTheDoor.clearPlayerModData(self.character)
+        if self.character and self.character:hasModData() then
+            HoldTheDoor.clearPlayerModData(self.character)
+        end
         return
     end
 
     -- Delegate to shared restore utility (handles HP math + door ModData)
     HoldTheDoor.restoreOrphanedDoor(door)
-    HoldTheDoor.clearPlayerModData(self.character)
+    if self.character and self.character:hasModData() then
+        HoldTheDoor.clearPlayerModData(self.character)
+    end
 end
 
 return HoldTheDoorAction
