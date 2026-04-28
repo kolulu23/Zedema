@@ -11,6 +11,7 @@ HoldTheDoor.Keys = {
     PLAYER_ID         = "holdTheDoor_playerID",
     ORIGINAL_HEALTH   = "holdTheDoor_originalHealth",
     ORIGINAL_MAX_HP   = "holdTheDoor_originalMaxHealth",
+    BOOSTED_HEALTH    = "holdTheDoor_boostedHealth",
     PLAYER_HOLDING    = "holdTheDoor_heldDoor",
 }
 
@@ -91,9 +92,20 @@ function HoldTheDoor.canHoldDoor(player, door)
         return false, nil
     end
 
-    -- Door must not already be held by another player
+    -- Door must not already be held by another player.
+    -- If the holder disconnected (orphaned hold), restore the door automatically.
     if HoldTheDoor.isDoorHeld(door) then
-        return false, "ContextMenu_HoldTheDoor_DoorHeld"
+        local holderID = HoldTheDoor.getHolderID(door)
+        if holderID then
+            local holder = getPlayerByOnlineID(holderID)
+            if holder == nil then
+                HoldTheDoor.restoreOrphanedDoor(door)
+            else
+                return false, "ContextMenu_HoldTheDoor_DoorHeld"
+            end
+        else
+            return false, "ContextMenu_HoldTheDoor_DoorHeld"
+        end
     end
 
     return true, nil
@@ -117,6 +129,7 @@ function HoldTheDoor.clearDoorModData(door)
     md[HoldTheDoor.Keys.PLAYER_ID] = nil
     md[HoldTheDoor.Keys.ORIGINAL_HEALTH] = nil
     md[HoldTheDoor.Keys.ORIGINAL_MAX_HP] = nil
+    md[HoldTheDoor.Keys.BOOSTED_HEALTH] = nil
 end
 
 --- Clear HoldTheDoor ModData from a player.
@@ -136,17 +149,16 @@ function HoldTheDoor.restoreOrphanedDoor(door)
     local md = door:getModData()
     if md[HoldTheDoor.Keys.IS_HELD] ~= true then return false end
 
+    local origHealth = md[HoldTheDoor.Keys.ORIGINAL_HEALTH]
     local origMax = md[HoldTheDoor.Keys.ORIGINAL_MAX_HP]
-    if origMax and origMax > 0 then
-        local currentMax = door:getMaxHealth()
+    local boostedHealth = md[HoldTheDoor.Keys.BOOSTED_HEALTH]
+
+    if origHealth and origMax and boostedHealth and boostedHealth > 0 then
         local currentHealth = door:getHealth()
-        local healthRatio = 1.0
-        if currentMax > 0 then
-            healthRatio = currentHealth / currentMax
-        end
-        local restoredHealth = math.max(0, math.floor(origMax * healthRatio))
-        door:setMaxHealth(origMax)
-        door:setHealth(math.min(restoredHealth, origMax))
+        local healthRatio = currentHealth / boostedHealth
+        local restoredHealth = math.max(1, math.floor(origHealth * healthRatio))
+        restoredHealth = math.min(restoredHealth, origMax)
+        door:setHealth(restoredHealth)
     end
 
     HoldTheDoor.clearDoorModData(door)

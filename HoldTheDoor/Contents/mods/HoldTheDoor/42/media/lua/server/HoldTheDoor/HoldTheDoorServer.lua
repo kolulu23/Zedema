@@ -59,24 +59,6 @@ Events.OnDestroyIsoThumpable.Add(HoldTheDoorServer.OnDestroyIsoThumpable)
 Events.OnObjectAboutToBeRemoved.Add(HoldTheDoorServer.OnObjectAboutToBeRemoved)
 
 ---------------------------------------------------------------------------
--- Save/load cleanup: on game start, scan all players for orphaned
--- holdTheDoor_heldDoor flags and clear them. The matching door's HP
--- is restored lazily via OnLoadGridsquare (below) since not all cells
--- are loaded yet at OnGameStart time.
----------------------------------------------------------------------------
-function HoldTheDoorServer.OnGameStart()
-    local numPlayers = getNumActivePlayers()
-    for i = 0, numPlayers - 1 do
-        local player = getSpecificPlayer(i)
-        if player then
-            HoldTheDoor.clearPlayerModData(player)
-        end
-    end
-end
-
-Events.OnGameStart.Add(HoldTheDoorServer.OnGameStart)
-
----------------------------------------------------------------------------
 -- When a grid square loads, check its objects for orphaned held doors.
 -- This catches doors whose holder disconnected or the game was saved
 -- mid-hold. Runs once per square load — no per-tick overhead.
@@ -97,20 +79,6 @@ function HoldTheDoorServer.OnLoadGridsquare(square)
     end
 end
 
-Events.OnLoadGridsquare.Add(HoldTheDoorServer.OnLoadGridsquare)
-
----------------------------------------------------------------------------
--- MP: when a player disconnects, clean up any door they were holding.
--- We don't scan all cells (expensive); instead we just clear the player
--- flag. The door's orphaned ModData will be cleaned up by
--- OnLoadGridsquare when the chunk is next loaded.
----@param player IsoPlayer
----------------------------------------------------------------------------
-function HoldTheDoorServer.OnPlayerDisconnect(player)
-    if player == nil then return end
-    HoldTheDoor.clearPlayerModData(player)
-end
-
-Events.OnPlayerDisconnect.Add(HoldTheDoorServer.OnPlayerDisconnect)
+Events.LoadGridsquare.Add(HoldTheDoorServer.OnLoadGridsquare)
 
 return HoldTheDoorServer

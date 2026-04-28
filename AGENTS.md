@@ -190,7 +190,7 @@ When Umbrella type stubs are incomplete, consult these external resources:
 ### Finding Information
 1. Start with Umbrella type stubs in `Umbrella/library/lua/{client,server,shared}/`
 2. Check LuaDocs for Lua-specific API functions and events
-3. Consult JavaDocs for Java class methods exposed to Lua
+3. Consult JavaDocs for Java class methods exposed to Lua in `Umbrella/library/java/`
 4. Search `zombie/` decompiled source when documentation is unclear
 5. Use PZWiki for modding guides, best practices, and examples
 
