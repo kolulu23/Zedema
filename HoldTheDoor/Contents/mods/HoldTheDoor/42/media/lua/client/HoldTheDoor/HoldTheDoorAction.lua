@@ -54,11 +54,9 @@ function HoldTheDoorAction:start()
     self.originalHealth = self.door:getHealth()
     self.originalMaxHealth = self.door:getMaxHealth()
 
-    -- Apply HP multiplier
+    -- Apply HP multiplier (setHealth only; setMaxHealth is not Lua-exposed in B42)
     local multiplier = HoldTheDoor.getHPMultiplier()
-    local boostedMax = math.floor(self.originalMaxHealth * multiplier)
     local boostedHealth = math.floor(self.originalHealth * multiplier)
-    self.door:setMaxHealth(boostedMax)
     self.door:setHealth(boostedHealth)
 
     -- Tag the door via ModData
@@ -67,6 +65,7 @@ function HoldTheDoorAction:start()
     doorMD[HoldTheDoor.Keys.PLAYER_ID] = self.character:getOnlineID()
     doorMD[HoldTheDoor.Keys.ORIGINAL_HEALTH] = self.originalHealth
     doorMD[HoldTheDoor.Keys.ORIGINAL_MAX_HP] = self.originalMaxHealth
+    doorMD[HoldTheDoor.Keys.BOOSTED_HEALTH] = boostedHealth
 
     -- Tag the player
     if self.character:hasModData() then

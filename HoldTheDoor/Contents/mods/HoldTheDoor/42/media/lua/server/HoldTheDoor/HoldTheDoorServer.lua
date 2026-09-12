@@ -97,20 +97,6 @@ function HoldTheDoorServer.OnLoadGridsquare(square)
     end
 end
 
-Events.OnLoadGridsquare.Add(HoldTheDoorServer.OnLoadGridsquare)
-
----------------------------------------------------------------------------
--- MP: when a player disconnects, clean up any door they were holding.
--- We don't scan all cells (expensive); instead we just clear the player
--- flag. The door's orphaned ModData will be cleaned up by
--- OnLoadGridsquare when the chunk is next loaded.
----@param player IsoPlayer
----------------------------------------------------------------------------
-function HoldTheDoorServer.OnPlayerDisconnect(player)
-    if player == nil then return end
-    HoldTheDoor.clearPlayerModData(player)
-end
-
-Events.OnPlayerDisconnect.Add(HoldTheDoorServer.OnPlayerDisconnect)
+Events.LoadGridsquare.Add(HoldTheDoorServer.OnLoadGridsquare)
 
 return HoldTheDoorServer

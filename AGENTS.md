@@ -10,8 +10,8 @@ Project Zomboid mod workspace for [Build 42](https://pzwiki.net/wiki/Build_42) w
 WorkshopItem/              # One workshop item per game modpack
   Contents/
     mods/
-      ModName/             # One mod (can have multiple per workshop item)
-        common/            # MANDATORY folder (even if empty), stores large assets
+      ModName/             # One mod (multiple allowed per workshop item)
+        common/            # MANDATORY folder (even if empty); stores large assets
           media/           # Shared assets (models, textures, animations)
         42/                # Version folder for B42
           mod.info         # Build 42 mod metadata
@@ -21,23 +21,80 @@ WorkshopItem/              # One workshop item per game modpack
             scripts/       # B42 script definitions
 ```
 
-**Important**: 
-- `common/` folder is **required** for B42 mods to be detected
-- File/folder names must be lowercase for macOS/Linux compatibility
-- Non-`Contents/` folders in workshop item are ignored by game (safe for git/IDE configs)
+**Important**:
+- `common/` is **required** for B42 mods to be detected
+- File/folder names must be lowercase (macOS/Linux compatibility)
+- Non-`Contents/` folders in a workshop item are ignored by the game (safe for git/IDE configs)
 
 ## Key Paths
 
-- `Umbrella/` - Lua API type stubs (git submodule, read-only in VSCode)
-- `zombie/` - Decompiled Java game source for reference (gitignored)
-- `pzmc-template/` - Community mod template (git submodule)
-- `.env` - Set `ZED_CACHE_DIR` and `ZED_MEDIA_DIR` for deploy scripts
+- `Umbrella/` — Lua API type stubs (git submodule, read-only in VSCode)
+- `zombie/` — decompiled Java game source for reference (gitignored, script-managed)
+- `pzmc-template/` — community mod template (git submodule)
+- `.env` — sets `ZED_CACHE_DIR`, `ZED_MEDIA_DIR`, and API-ref automation options
+- `.api-refs.json` — **committed** per-branch API pin (Umbrella tag + Java source version)
+- `.api-cache/` — local cache of decompiled sources + decompiler binaries (gitignored)
+
+## API Reference Versioning (Branch Workflow)
+
+PZ updates often and APIs differ per version, so refs are pinned per branch.
+Background, research and verification log: `docs/api-reference-automation-report.md`.
+
+| Branch   | API references                                        |
+|----------|-------------------------------------------------------|
+| `main`   | Latest game API + latest decompiled source            |
+| `42.13`  | Umbrella tag `42.13.0` + decompiled 42.13 sources     |
+| `41`     | Umbrella tag `41.78.16` + decompiled 41.x sources     |
+
+The pin lives in committed `.api-refs.json` + the `Umbrella` submodule pointer. `zombie/` and `.api-cache/` are local-only and are (re)materialized from the pin.
+
+```bash
+# Pin the current branch to a game version (or "latest")
+sh scripts/update_api_reference.sh latest     # main
+sh scripts/update_api_reference.sh 42.13      # version branch
+sh scripts/update_api_reference.sh --no-java 42.13   # Lua stubs only
+
+# One-time setup: auto-restore refs on branch switch / merge
+sh scripts/install_git_hooks.sh
+
+# Manually restore the refs pinned by the current branch (no decompiling)
+sh scripts/restore_api_refs.sh
+```
+
+### How `update_api_reference.sh` works
+
+1. **Resolve version** — maps the argument to the best Umbrella tag (`latest` → newest tag, `42.13` → `42.13.0`, `41` → `41.78.16`, `42.20.4` → nearest `42.20.0`)
+2. **Lua API stubs** — checks out the tag in the `Umbrella` submodule ([PZ-Umbrella/Umbrella](https://github.com/PZ-Umbrella/Umbrella), per-version tags)
+3. **Decompiled Java (`zombie/`)** — picks the matching [ZomboidDecompiler](https://github.com/demiurgeQuantified/ZomboidDecompiler) release (latest for 42.13.0+, v0.2.3 for older), then:
+   - **decompiles** the locally installed game when it matches the target version (source of truth)
+   - or **restores** from `.api-cache/sources/<version>/` (previous runs)
+   - or **fetches** from `ZED_DECOMP_REMOTE` (optional decompiled-source repo)
+4. **Records** the result in `.api-refs.json` — commit it (and the `Umbrella` pointer) so the pin travels with the branch
+
+### Starting a version branch
+
+```bash
+git switch -c 42.13
+sh scripts/update_api_reference.sh 42.13
+git add .api-refs.json Umbrella
+git commit -m "Pin API refs to 42.13"
+```
+
+Decompiling an old version requires that game build installed (Steam → Project Zomboid → Properties → Betas), a cached snapshot in `.api-cache/`, or `ZED_DECOMP_REMOTE` set in `.env`. The script says exactly what's missing.
+
+### Reference stability (trust order)
+
+1. **Umbrella stubs** — community-maintained, version-tagged, the de-facto standard; check here first
+2. **Official JavaDocs** (https://projectzomboid.com/modding/) — authoritative but current version only
+3. **PZWiki API docs** — https://pzwiki.net/wiki/Modding (Lua/Java/Scripts), notes per-build changes
+4. **Local decompile (`zombie/`)** — decompiled by yourself from the exact build you target, via ZomboidDecompiler; most reliable for internals
+5. **Third-party decompiled repos** — no actively maintained, version-tagged public repo exists; treat as unverified. Prefer your own `.api-cache/` snapshots (optionally synced to a private repo via `ZED_DECOMP_REMOTE`)
 
 ## PZWiki Reference
 
 ### Media Folder Structure (`{42|common}/media/`)
 
-Each subfolder serves a specific purpose. Files with matching relative paths to vanilla **override** the originals.
+Files with relative paths matching vanilla ones **override** the originals.
 
 | Folder | Purpose |
 |--------|---------|
@@ -56,37 +113,38 @@ Each subfolder serves a specific purpose. Files with matching relative paths to 
 
 ### Adding & Replacing Assets
 
-- **Override by path**: Place a file at the same relative path inside your mod's `media/` folder (e.g. `media/scripts/newitems.txt`)
-- **New items/icons**: Icons go in `media/textures/` and must be named `item_<IconName>.png`. Subfolder paths work: `Icon = sub/MyIcon` → `media/textures/item_sub/MyIcon.png`
-- **Soft overrides**: Item and craftRecipe blocks merge when redefined (parameters you don't specify are kept)
-- **File overrides**: Naming a `.txt` script file the same relative path as vanilla **replaces the entire file** - avoid this, use soft overrides instead
-- **Texture pack extraction**: Vanilla icons are in `ProjectZomboid/media/texturepacks/UI2.pack` - use a Pack Viewer tool to extract PNGs
+- **Override by path**: place a file at the same relative path inside your mod's `media/` (e.g. `media/scripts/newitems.txt`)
+- **New items/icons**: icons go in `media/textures/` named `item_<IconName>.png`; subfolder paths work: `Icon = sub/MyIcon` → `media/textures/item_sub/MyIcon.png`
+- **Soft overrides**: redefined item/craftRecipe blocks merge; unspecified parameters are kept
+- **File overrides**: naming a `.txt` script file the same relative path as vanilla **replaces the entire file** — avoid; use soft overrides instead
+- **Texture pack extraction**: vanilla icons are in `ProjectZomboid/media/texturepacks/UI2.pack`; extract with a Pack Viewer tool
 
 ### Asset Format Requirements
 
 - **Textures**: 8bit PNG only (16bit rejected)
 - **Models**: `.fbx` (recommended), `.glb`, or `.x` (legacy, not recommended)
 - **Sounds**: `.ogg` or `.wav`
-- **Videos**: `.bik` format (manual install only)
+- **Videos**: `.bik` (manual install only)
 
 ### Finding Game Assets
 
 - **Game files**: `Steam/steamapps/common/ProjectZomboid/`
 - **Game scripts/assets**: `ProjectZomboid/media/`
 - **Java source**: `ProjectZomboid/zombie/` (decompile to understand internal behavior)
-- **Console log**: `%UserProfile%/Zomboid/console.txt` (SP) - contains `print()` output and errors
-- **Cache folder**: `%UserProfile%/Zomboid/` - can be changed via `-cachedir=<path>` startup parameter
+- **Console log**: `%UserProfile%/Zomboid/console.txt` (SP) — contains `print()` output and errors
+- **Cache folder**: `%UserProfile%/Zomboid/` — movable via `-cachedir=<path>` startup parameter
 
 ### API Reference Resources
 
-- **JavaDocs** (official): https://projectzomboid.com/modding/ - Exposed Java classes and methods
-- **LuaDocs** (unofficial): Community Lua API reference, functions like JavaDocs but for Lua
-- **ScriptsDocs** / **PZ Scripts Data**: Complete API reference for all zedscript blocks and parameters
-- **Decompiling game code**: Use tools like JADX or similar to understand internal game behavior when docs are incomplete
+- **Umbrella** (Lua + Java stubs): https://github.com/PZ-Umbrella/Umbrella — version-tagged; used by `update_api_reference.sh`
+- **JavaDocs** (official): https://projectzomboid.com/modding/ — exposed Java classes and methods
+- **LuaDocs** (unofficial): community Lua API reference, like JavaDocs but for Lua
+- **ScriptsDocs** / **PZ Scripts Data**: complete reference for all zedscript blocks and parameters
+- **Decompiling game code**: use [ZomboidDecompiler](https://github.com/demiurgeQuantified/ZomboidDecompiler) (Vineflower-based, PZWiki-recommended); `sh scripts/update_api_reference.sh <version>` automates this
 
 ### Lua Events (Entry Points)
 
-Most Lua code starts by hooking into events. Key events:
+Lua code usually starts by hooking events. Key events:
 - `OnGameStart` - Save loaded
 - `OnTick` - Every game tick
 - `OnPlayerUpdate` - Per player per tick
@@ -99,7 +157,7 @@ Full event list: https://pzwiki.net/wiki/Category:Lua_events
 
 ### Networking (B42.13+)
 
-Since 42.13, server handles player damage, item stats, etc. Use commands for client ↔ server sync:
+Since 42.13 the server handles player damage, item stats, etc. Sync client ↔ server via commands:
 
 ```lua
 -- Client → Server
@@ -123,11 +181,11 @@ Events.OnServerCommand.Add(function(module, command, args)
 end)
 ```
 
-Commands only carry plain data (strings, booleans, numbers, tables) - no Java object instances. Pass player references via `onlineID` (`player:getOnlineID()` → `getPlayerByOnlineID(id)`).
+Commands only carry plain data (strings, booleans, numbers, tables) — no Java object instances. Pass player references via `onlineID` (`player:getOnlineID()` → `getPlayerByOnlineID(id)`).
 
 ### UI Creation
 
-UI elements derive from `ISUIElement`/`ISPanel`. Always put UI code in `lua/client/`.
+UI elements derive from `ISUIElement`/`ISPanel`; always put UI code in `lua/client/`.
 
 ```lua
 ---@class MyPanel : ISPanel
@@ -155,8 +213,8 @@ See https://pzwiki.net/wiki/User_Interface for details.
 
 ### Scripts (Zedscripts)
 
-Text-based data definitions in `media/scripts/` (`.txt` files). Key rules:
-- Comments: `/* ... */` (multiline only, `//` does NOT work)
+Text data definitions in `media/scripts/` (`.txt` files). Key rules:
+- Comments: `/* ... */` (multiline only; `//` does NOT work)
 - Every key-value line ends with `,` (including the last one)
 - Module prefix: always reference as `Base.ItemName` or `MyModule.MyItem`
 - Soft overrides supported for items and craftRecipes
@@ -176,21 +234,24 @@ See https://pzwiki.net/wiki/Scripts for all block types.
 
 ## External API References
 
-When Umbrella type stubs are incomplete, consult these external resources:
+For gaps in Umbrella type stubs, consult:
 
 ### Official Documentation
-- **JavaDocs**: https://projectzomboid.com/modding/ - Official Java class/method documentation
-- **PZWiki**: https://pzwiki.net/wiki/Modding - Wiki for guides and explanations
+
+- **JavaDocs**: https://projectzomboid.com/modding/ — official Java class/method documentation
+- **PZWiki**: https://pzwiki.net/wiki/Modding — guides and explanations
 
 ### Unofficial Documentation
-- **LuaDocs**: Community-maintained Lua API reference, structured like JavaDocs but for Lua
-- **ScriptsDocs** / **PZ Scripts Data**: Complete zedscript block parameter reference
-- **Decompiled source** (`zombie/`): Search Java files to understand internal game behavior
+
+- **LuaDocs**: community Lua API reference, structured like JavaDocs but for Lua
+- **ScriptsDocs** / **PZ Scripts Data**: complete zedscript block parameter reference
+- **Decompiled source** (`zombie/`): search Java files to understand internal game behavior
 
 ### Finding Information
-1. Start with Umbrella type stubs in `Umbrella/library/lua/{client,server,shared}/`
+
+1. Start with Umbrella stubs in `Umbrella/library/lua/{client,server,shared}/`
 2. Check LuaDocs for Lua-specific API functions and events
-3. Consult JavaDocs for Java class methods exposed to Lua
+3. Consult JavaDocs for Java methods exposed to Lua in `Umbrella/library/java/`
 4. Search `zombie/` decompiled source when documentation is unclear
 5. Use PZWiki for modding guides, best practices, and examples
 
@@ -205,6 +266,11 @@ When Umbrella type stubs are incomplete, consult these external resources:
 
 # Deploy to local Zomboid workshop cache
 ./scripts/deploy_workshop.sh "WorkshopName"
+
+# Pin API references (Umbrella stubs + decompiled java) for this branch
+sh scripts/update_api_reference.sh latest    # or 42.13 / 41 / 41.78.16
+sh scripts/restore_api_refs.sh               # restore pin from cache (no decompile)
+sh scripts/install_git_hooks.sh              # auto-restore on branch switch
 ```
 
 ## mod.info Format
@@ -217,9 +283,9 @@ tags=Build 42
 versionMin=42.0
 ```
 
-**Location**: Must be in version folder (e.g., `42/mod.info`), NOT at mod root
+**Location**: must be in the version folder (e.g., `42/mod.info`), NOT at mod root
 
-**Required fields**: Only `id` and `name` are mandatory, others optional
+**Required fields**: only `id` and `name` are mandatory; others optional
 
 **Common fields**:
 - `id` - Unique mod identifier (NOT Workshop ID)
@@ -237,12 +303,12 @@ versionMin=42.0
 ## Editing Existing Mods
 
 1. Check `Umbrella/library/lua/` for existing API patterns before writing new code
-2. Decompiled Java in `zombie/` shows actual implementation - use when Umbrella lacks definitions or documentation
+2. Decompiled Java in `zombie/` shows the actual implementation — use when Umbrella lacks definitions or documentation
 3. Lua scripts go in `ModName/42/media/lua/{client,server,shared}/` or `ModName/common/media/lua/{client,server,shared}/`
 
 ## Client/Server/Shared Directory Roles
 
-Lua files are loaded based on which folder they're in (`media/lua/client/`, `media/lua/server/`, `media/lua/shared/`):
+Loading depends on the folder: `media/lua/client/`, `media/lua/server/`, or `media/lua/shared/`.
 
 | Folder | Singleplayer | MP Client | MP Server |
 |--------|-------------|-----------|-----------|
@@ -251,20 +317,20 @@ Lua files are loaded based on which folder they're in (`media/lua/client/`, `med
 | `shared` | ✓ | ✓ | ✓ |
 
 **Shared (`shared/`)**:
-- Loaded on BOTH client and server in multiplayer
+- Loaded on both client and server in multiplayer
 - Use for core game logic that needs to run everywhere
 - Most common location for mod logic
 
 **Client (`client/`)**:
 - NOT loaded on the MP server side
-- Use for UI elements, rendering, client-side input handling
-- Safe for ISUI classes without affecting server
-- **Pitfall**: Code here won't run on dedicated server hosts
+- Use for UI, rendering, client-side input handling
+- Safe for ISUI classes without affecting the server
+- **Pitfall**: code here won't run on dedicated server hosts
 
 **Server (`server/`)**:
-- Loaded everywhere despite the name (singleplayer, MP client, MP server)
-- Use for multiplayer-specific code that needs access on both sides
+- Loaded everywhere despite the name (SP, MP client, MP server)
+- Use for multiplayer-specific code needing both sides
 - Commonly used with PZ's networking APIs for RPCs and sync
-- **Pitfall**: Don't put actual server-only logic here - guard it with `isServer()` checks
+- **Pitfall**: not server-only logic — guard with `isServer()` checks
 
-**Key Rule**: The folder only controls **loading**. For actual client/server behavior separation, use runtime checks like `isClient()` and `isServer()` within your Lua code.
+**Key Rule**: the folder only controls **loading**. For actual client/server behavior separation, use runtime checks like `isClient()` and `isServer()` inside your Lua code.
