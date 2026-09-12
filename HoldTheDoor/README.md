@@ -93,8 +93,8 @@ HoldTheDoor/Contents/mods/HoldTheDoor/
                 ├── HoldTheDoor/
                 │   └── HoldTheDoorShared.lua  # Constants, utilities
                 └── Translate/EN/
-                    ├── ContextMenu_EN.lua
-                    └── Sandbox_EN.lua
+                    ├── ContextMenu.json
+                    └── Sandbox.json
 ```
 
 ## Architecture
@@ -113,7 +113,7 @@ HoldTheDoor/Contents/mods/HoldTheDoor/
 - **OnLoadGridsquare**: When any grid square loads, scans objects for orphaned `holdTheDoor_isHeld` ModData and restores original HP proportionally. This is lazy — only runs once per square load, not per tick.
 
 ### Multiplayer
-- **OnPlayerDisconnect**: Clears the disconnected player's holding flag. The door's orphaned ModData is cleaned on next chunk load via `OnLoadGridsquare`.
+- On game start (and load), each side clears its local players' holding flags; a disconnected player's hold is cleaned up when the door's chunk loads via `OnLoadGridsquare`.
 
 ### Race Conditions
 - **Idempotent cleanup**: `restoreDoor()` in the timed action uses a `_restored` guard flag — safe against double-call from `stop()` + `OnDestroyIsoThumpable` firing in the same tick.
