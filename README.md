@@ -9,7 +9,7 @@ Zedema/
 ├── Umbrella/             # Git submodule: Lua API type stubs
 ├── pzmc-template/        # Git submodule: Community mod template
 ├── MyExampleWorkshop/    # Workshop item project created from the template
-├── zomboid/              # Decompiled game code (gitignored)
+├── zombie                # Decompiled game code (gitignored)
 ├── scripts/              # Automation and utility scripts
 ├── .env                  # Environment variables for local paths
 ├── .vscode/
@@ -70,13 +70,13 @@ ZED_MEDIA_DIR=
 
 ### 4. Decompile Game Code (For Reference)
 
-The `zomboid/` directory contains decompiled Java source code for reference only (gitignored for legal reasons).
+The `zombie` directory contains decompiled Java source code for reference only (gitignored for legal reasons).
 
 To decompile from your game distribution:
 
 1. Follow the guide at [pzwiki.net/wiki/Decompiling_game_code](https://pzwiki.net/wiki/Decompiling_game_code)
 2. Use [Zomboid Decompiler](https://pzwiki.net/wiki/Zomboid_Decompiler) or [Vineflower](https://github.com/Vineflower/vineflower)
-3. Place decompiled sources in `zomboid/` (already gitignored)
+3. Place decompiled sources in `zombie` (already gitignored)
 
 ## Workshop Item Structure
 
