@@ -34,7 +34,6 @@ API_VERSION="$(parse_manifest resolved_api_version)"
 UMBRELLA_TAG="$(parse_manifest tag)"
 SOURCE_MODE="$(parse_manifest mode)"
 MANIFEST_GAME_VERSION="$(parse_manifest game_version)"
-MANIFEST_GAME_REVISION="$(parse_manifest game_revision)"
 
 if [ -z "$API_VERSION" ]; then
     warn ".api-refs.json exists but has no resolved_api_version — run sh scripts/update_api_reference.sh."
@@ -79,14 +78,14 @@ if [ -d "$CACHE_DIR" ]; then
     CACHE_GV="$(read_cache_meta_field "$API_VERSION" game_version)"
     CACHE_GR="$(read_cache_meta_field "$API_VERSION" game_revision)"
     write_marker "$ZOMBIE_DIR" "$API_VERSION" "cached" \
-        "${CACHE_GV:-$MANIFEST_GAME_VERSION}" "${CACHE_GR:-$MANIFEST_GAME_REVISION}"
+        "${CACHE_GV:-$MANIFEST_GAME_VERSION}" "$CACHE_GR"
     ok "zombie/ restored to $API_VERSION from cache."
     RESTORED=1
 elif [ -n "$DECOMP_REMOTE" ]; then
     if fetch_remote_sources "$API_VERSION" "$CACHE_DIR"; then
         mkdir -p "$ZOMBIE_DIR"
         sync_dir "$CACHE_DIR" "$ZOMBIE_DIR"
-        write_marker "$ZOMBIE_DIR" "$API_VERSION" "remote" "$MANIFEST_GAME_VERSION" "$MANIFEST_GAME_REVISION"
+        write_marker "$ZOMBIE_DIR" "$API_VERSION" "remote" "$MANIFEST_GAME_VERSION" ""
         ok "zombie/ restored to $API_VERSION from $DECOMP_REMOTE."
         RESTORED=1
     fi

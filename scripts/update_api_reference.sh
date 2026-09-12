@@ -22,8 +22,9 @@
 #           runs — copy that folder between machines if you like);
 #        c. or fetched from a decompiled-source repository, when
 #           ZED_DECOMP_REMOTE is configured.
-#   5. Records everything in .api-refs.json — commit that file (and the
-#      Umbrella submodule pointer) on the branch so the pin travels with git.
+#   5. Records the pin in .api-refs.json (game version, Umbrella tag/commit,
+#      source mode) — commit that file (and the Umbrella submodule pointer) on
+#      the branch so the pin travels with git.
 #
 # Branch workflow:
 #   main        -> `sh scripts/update_api_reference.sh latest`
@@ -179,7 +180,7 @@ fi
 # --- 4. manifest + summary -------------------------------------------------
 write_manifest() {
     printf '{\n' > "$MANIFEST_FILE"
-    printf '  "schema": 1,\n' >> "$MANIFEST_FILE"
+    printf '  "schema": 2,\n' >> "$MANIFEST_FILE"
     printf '  "requested": "%s",\n' "$TARGET" >> "$MANIFEST_FILE"
     printf '  "resolved_api_version": "%s",\n' "$API_VERSION" >> "$MANIFEST_FILE"
     printf '  "umbrella": {\n' >> "$MANIFEST_FILE"
@@ -193,9 +194,7 @@ write_manifest() {
     printf '  },\n' >> "$MANIFEST_FILE"
     printf '  "java_source": {\n' >> "$MANIFEST_FILE"
     printf '    "mode": "%s",\n' "$SOURCE_MODE" >> "$MANIFEST_FILE"
-    printf '    "game_version": "%s",\n' "$GAME_VERSION" >> "$MANIFEST_FILE"
-    printf '    "game_revision": "%s",\n' "$GAME_REVISION" >> "$MANIFEST_FILE"
-    printf '    "cache": ".api-cache/sources/%s/zombie"\n' "$API_VERSION" >> "$MANIFEST_FILE"
+    printf '    "game_version": "%s"\n' "$GAME_VERSION" >> "$MANIFEST_FILE"
     printf '  },\n' >> "$MANIFEST_FILE"
     printf '  "updated_at": "%s"\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$MANIFEST_FILE"
     printf '}\n' >> "$MANIFEST_FILE"

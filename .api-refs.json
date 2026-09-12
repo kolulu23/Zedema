@@ -1,21 +1,19 @@
 {
-  "schema": 1,
-  "requested": "42.17",
-  "resolved_api_version": "42.17.0",
+  "schema": 2,
+  "requested": "latest",
+  "resolved_api_version": "42.20.0",
   "umbrella": {
     "remote": "https://github.com/PZ-Umbrella/Umbrella",
-    "tag": "42.17.0",
-    "commit": "789fc8a492003754cd4ddccd70a4ba1f7e783778"
+    "tag": "42.20.0",
+    "commit": "98f50ae698aab1dc7c44ba4fba87c33c800fee20"
   },
   "decompiler": {
-    "release": "v0.3.2",
+    "release": "latest",
     "compatibility": "latest release (supports game 42.13.0+)"
   },
   "java_source": {
     "mode": "decompiled",
-    "game_version": "42.17",
-    "game_revision": "964",
-    "cache": ".api-cache/sources/42.17.0/zombie"
+    "game_version": "42.20.4"
   },
-  "updated_at": "2026-09-08T03:31:23Z"
+  "updated_at": "2026-09-12T16:11:12Z"
 }
