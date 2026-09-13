@@ -2,146 +2,162 @@
 
 > No Barricade? No Problem!
 
-Keep zombies out by holding the door — with your body. The door still breaks, but with your strength, it can hold longer. Your teammates will thank you for your bravery.
+Right-click a closed, unlocked, unbarricaded door and select **Hold It**. Your character approaches the door on their current side and keeps their arms extended in a braced pose. Select **Let Go**, move, run, aim, or use the normal cancel-action control to release it.
 
-**Build 42** · **v0.1.0** · by kolulu
+The holder cannot open or lock doors while bracing: the interaction key is suppressed, context callbacks are guarded, and vanilla open/lock timed actions are checked again at completion. The previous interaction-key setting is restored on exit.
 
-## Features
+Ordinary `IsoDoor` doors and player-built `IsoThumpable` doors are supported. Garage doors and multi-panel double doors are excluded because their panels move and break together. Locked doors (including key, padlock and combination locks), open doors and barricaded doors are ineligible. Barricades on either face count.
 
-- **"Hold It"** context menu option on right-clicking any closed door
-- Player enters a holding posture, physically bracing the door
-- Door HP is **multiplied** while held (configurable in Sandbox Options)
-- Moving, aiming, or running **automatically releases** the door
-- If the door **breaks while held**, the player gets **knocked down**
-- Zombies and NPCs can still attack the door — but it **cannot be opened by key** while held
-- Works on **locked doors** (not on barricaded doors)
-- All values configurable via **Sandbox Options**
+## Door health
 
-## State Flow
+**Door HP Multiplier** can be set in Sandbox Options. It multiplies remaining HP, not maximum HP: `IsoDoor` has no public maximum-health setter.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
+For example, multiplier of 3 makes a 500 HP door become 1500 while held. If it takes 600 damage, releasing converts the remaining 900 back to 300 HP. Releasing never repairs a door. Integer rounding rounds down, with a minimum of 1 HP for a surviving door. A broken door is never restored or resurrected.
 
-    state "Player State" as PS {
-        Idle --> RightClickDoor: Right-click door
-        RightClickDoor --> Idle: Door open / barricaded / HP=0 / already holding
-        RightClickDoor --> MenuShown: canHoldDoor() = true
-        MenuShown --> Idle: Dismiss menu
-        MenuShown --> StartHolding: Select "Hold It"
-    }
+The animation is a separate `HoldTheDoorBrace` action node sampling the vanilla `Bob_AimShove` clip at 45% of its duration, before the recoil. `m_TrackTimeToVariable` binds the clip position to the action-owned `HoldTheDoorPose` variable. The clip does not loop or advance; the engine blends into the pose over 0.25 seconds and out over 0.15 seconds. The timed action remains indefinite. There are no combat collision events, so bracing does not attack the door or shove nearby characters. The pose variable is registered before entering the animation state so B42 can include it in the remote action snapshot, and is cleared on release or disconnect.
 
-    state "Holding State" as HS {
-        StartHolding --> HoldActive: start() — face door, boost HP, tag ModData
-        HoldActive --> HoldActive: update() — keep facing door
-        HoldActive --> Releasing: Player moves / aims
-        HoldActive --> Releasing: Door opens externally
-        HoldActive --> Releasing: Door gets barricaded
-        HoldActive --> DoorBreaks: Door HP reaches 0
-    }
+Facing follows the door edge and the player's adjacent square: north-edge doors face N from their own square or S from the opposite square; west-edge doors face W or E respectively. `faceDirection()` keeps the body perpendicular even when the player stands off-center. This avoids `faceLocation()`'s implicit half-tile offset.
 
-    state "Cleanup" as CL {
-        Releasing --> Idle: stop() — restore HP proportionally, clear ModData
-        DoorBreaks --> KnockedDown: OnDestroyIsoThumpable — setKnockedDown(true)
-        KnockedDown --> Idle: Player recovers, ModData cleared
-    }
+## Languages and mod metadata
 
-    state "Edge: Object Removed" as ER {
-        HoldActive --> ObjectRemoved: Admin / mod removes door
-        ObjectRemoved --> Idle: OnObjectAboutToBeRemoved — clear player ModData (no knockdown)
-    }
-```
+English (`EN`) and Simplified Chinese (`CN`) are included. PZ selects the language automatically; no custom language setting is needed.
 
-## HP Modification Flow
+Files are under `42/media/lua/shared/Translate/<language>/` 
+
+To add a language, copy the three English JSON files into the game's language-code directory and translate the values while preserving the keys. Save as UTF-8. Gameplay code continues to call `getText("ContextMenu_HoldTheDoor_HoldIt")`; it does not branch on language. English provides the fallback. Preserve the engine's `Translate`, language-code and JSON filename casing.
+
+`mod.info` retains the ID `holdTheDoor`, supplies the English fallback description, and declares author, poster, category, version and Build 42 tag. Release 0.1.1 replaces mixed heading/font styles with plain paragraphs separated only by the supported `<BR>` command. `EN/Mod.json` mirrors that description; `CN/Mod.json` supplies the translated title and description. Mod metadata translations are handled by `Translator.readModTranslation`, independently of context-menu strings.
+
+## State and networking
+
+The client action progresses through **waiting for approval → holding → finished**. Cancellation is valid while waiting as well as while holding. Each attempt gets its own token so late responses cannot restart a cancelled animation or release a newer session.
+
+Singleplayer and the multiplayer server share the same authority code. Only the authority changes door HP. A claim is validated against the actual door object, sprite, orientation, closed/lock/barricade state, player condition and the two squares touching its edge. One player can hold one door, and one door can have one holder. Clients send only plain data and the server uses the command sender as the player identity.
+
+The client sends a heartbeat once per second; a five-second lease bounds cleanup after disconnects or a stalled client. Movement, aiming, death, invalid position, removal, locking, opening or barricading release the hold. Direct external door changes are detected and cancel the hold rather than being reverted. This is not a universal Java-level door lock against other players or other mods.
+
+Door destruction is detected from `isDestroyed()`/zero health both during object removal and on the authority tick. The server tells the holder to stop their action and enter the native `wasBumped` fall transition (`stagger`, `BumpFall`, `pushedFront`). Ordinary administrative removal releases without falling. The game controls recovery and the normal consequences of falling; there is no forced movement-unlock timer. The scaffold's unused Stumble Duration option was removed for this reason.
+
+Cleanup is idempotent. Runtime references stay in Lua tables, not serialized player ModData. Door ModData stores only the original HP and multiplier, which allows `LoadGridsquare` to repair orphaned boosts after loading. `OnSave` releases active holds before world objects are saved. Client queue/disconnect watchdogs restore input flags when an action disappears unexpectedly.
+
+## Implementation
+
+All paths below are relative to `Contents/mods/HoldTheDoor/42/media/`:
+
+| File | Responsibility |
+|---|---|
+| `lua/shared/holdthedoor/core.lua` | Door eligibility, position, reference validation, health restoration |
+| `lua/shared/holdthedoor/guards.lua` | Vanilla open/lock timed-action guards on client and server |
+| `lua/server/holdthedoor/authority.lua` | Claims, HP changes, leases, destruction and persistence cleanup |
+| `lua/client/holdthedoor/action.lua` | Timed action, replies, input flags, fall transition |
+| `lua/client/holdthedoor/menu.lua` | Context options, approach path and callback guards |
+| `AnimSets/player/actions/holdthedoor.xml` | Fixed bracing pose with entry/exit blending |
+
+### Dependencies
+
+`core.lua` is the dependency root; every other Lua module loads it. `menu.lua` is the client entry point and pulls in both `action.lua` and `guards.lua`. `guards.lua` reads `H.actions`/`H.sessions` to block vanilla open/lock actions while a hold is active. `authority.lua` returns early wherever `isClient()` is true, so only singleplayer or the server side owns authority.
 
 ```mermaid
 flowchart TD
-    A["Original: HP=500, Max=500"] -->|"start(): multiplier=3x"| B["Boosted: HP=1500, Max=1500"]
-    B -->|"Zombies deal damage"| C["Boosted: HP=900, Max=1500<br/>(60% remaining)"]
-    C -->|"stop(): proportional restore"| D["Restored: HP=300, Max=500<br/>(60% of original)"]
-    B -->|"No damage taken"| E["stop(): full restore"]
-    E --> F["Restored: HP=500, Max=500"]
-    C -->|"HP reaches 0"| G["Door destroyed — player knocked down"]
+    subgraph shared["lua/shared — loaded everywhere"]
+        core["core.lua<br/>stateless helpers, door references, HP restore"]
+        guards["guards.lua<br/>patches ISOpenCloseDoor / ISLockDoor"]
+    end
+    subgraph client["lua/client — not loaded on dedicated servers"]
+        menu["menu.lua<br/>context menu, approach, callback guards"]
+        action["action.lua<br/>ISHoldTheDoor timed action"]
+    end
+    subgraph server["lua/server — authority"]
+        auth["authority.lua<br/>sessions, HP boost, lease, cleanup"]
+    end
+    anim["AnimSets/player/actions/holdthedoor.xml<br/>HoldTheDoorBrace anim node"]
+
+    menu -->|require| action
+    menu -->|require| guards
+    action -->|require| core
+    guards -->|require| core
+    auth -->|require| core
+
+    action -->|"setActionAnim + HoldTheDoorPose"| anim
+    guards -.->|"H.actions / H.held() checks"| core
+    action -.->|"begin / pulse / end"| auth
+    auth -.->|"accepted / released / broken"| action
 ```
 
-## Sandbox Options
+### Runtime flow
 
-| Option | Type | Range | Default | Description |
-|--------|------|-------|---------|-------------|
-| HP Multiplier | double | 1.5 – 10.0 | 3.0 | How much the door's max HP is multiplied while held |
-| Stumble Duration | double | 0.5 – 5.0 | 2.0 | How long the player is knocked down when the door breaks |
+In singleplayer `sendClientCommand`/`sendServerCommand` are replaced by direct calls to `H.command`/`H.onReply`, so the same sequence runs without packets.
 
-Access in Lua: `SandboxVars.HoldTheDoor.HPMultiplier`, `SandboxVars.HoldTheDoor.StumbleDuration`
+```mermaid
+sequenceDiagram
+    autonumber
+    participant menu as menu.lua
+    participant act as action.lua
+    participant auth as authority.lua
+    participant door as door object
 
-## File Structure
+    menu->>act: queue ISHoldTheDoor (walking first if not adjacent)
+    act->>act: start() — token = H.reference(), suppress interact key
+    act->>auth: begin + door reference
+    auth->>door: validate, write ModData { multiplier, original }
+    auth->>door: setHealth(original × multiplier), sync
+    auth-->>act: accepted
+    act->>act: setAnimVariable("HoldTheDoorPose", "0.45")
+    act->>act: setActionAnim("HoldTheDoorBrace")
 
+    loop while holding
+        act->>auth: pulse (once per second)
+        auth->>auth: refresh five-second lease
+    end
+
+    alt player releases / moves / aims / action cancelled
+        act->>auth: end
+    else door destroyed
+        auth->>auth: tick detects isDestroyed() / HP ≤ 0
+    end
+
+    auth->>door: H.restore() — proportional HP, clear ModData, sync
+    auth-->>act: state = released / broken
+    alt broken
+        act->>act: clear queue, stagger, BumpFall("pushedFront")
+    end
 ```
-HoldTheDoor/Contents/mods/HoldTheDoor/
-├── common/                           # Required for B42 mod detection
-└── 42/
-    ├── mod.info
-    ├── poster.png
-    └── media/
-        ├── sandbox-options.txt
-        └── lua/
-            ├── client/HoldTheDoor/
-            │   ├── HoldTheDoorAction.lua   # Looped timed action
-            │   └── HoldTheDoorMenu.lua     # Context menu hook
-            ├── server/HoldTheDoor/
-            │   └── HoldTheDoorServer.lua   # Destruction events, cleanup
-            └── shared/
-                ├── HoldTheDoor/
-                │   └── HoldTheDoorShared.lua  # Constants, utilities
-                └── Translate/EN/
-                    ├── ContextMenu.json
-                    └── Sandbox.json
+
+### State ownership
+
+Only door ModData survives a save; the Lua tables and the pose variable are runtime state that is rebuilt on load.
+
+```mermaid
+flowchart LR
+    subgraph clientState["Client runtime only"]
+        actions["H.actions[player]<br/>active action"]
+        pending["pending[token]<br/>awaiting reply"]
+        pose["HoldTheDoorPose<br/>player anim variable"]
+    end
+    subgraph authorityState["Authority runtime only"]
+        sessions["H.sessions[player]<br/>door, token, lease"]
+        doors["doors[door]<br/>holder"]
+    end
+    modData["Door ModData<br/>holdthedoor_session = { multiplier, original }"]
+
+    pending -.->|"begin / pulse / end"| sessions
+    sessions -->|"begin writes, release clears"| modData
+    modData -->|"LoadGridsquare repairs orphaned boosts"| sessions
 ```
 
-## Architecture
+## Verification
 
-| File | Location | Responsibility |
-|------|----------|---------------|
-| **HoldTheDoorShared** | `shared/` | ModData key constants, door validation, eligibility checks, HP restore utility |
-| **HoldTheDoorAction** | `client/` | `ISBaseTimedAction` derivative — manages hold lifecycle (`start`/`update`/`stop`) |
-| **HoldTheDoorMenu** | `client/` | `OnFillWorldObjectContextMenu` hook — adds "Hold It", disables vanilla Open/Unlock when held |
-| **HoldTheDoorServer** | `server/` | Event hooks for door destruction (knockdown), save/load cleanup, MP disconnect cleanup |
+References checked: pinned Umbrella **42.20.0**, locally available Java reference **42.20.4**, and vanilla Lua action implementations. The existing `versionMin=42.17` is retained, but older builds were not separately verified.
 
-## Safeguards
+Run from the repository root with a working Lua interpreter:
 
-### Save/Load Recovery
-- **OnGameStart**: Clears all players' `holdTheDoor_heldDoor` flags (no timed action survives a save/load)
-- **OnLoadGridsquare**: When any grid square loads, scans objects for orphaned `holdTheDoor_isHeld` ModData and restores original HP proportionally. This is lazy — only runs once per square load, not per tick.
+```sh
+lua HoldTheDoor/tests/lifecycle.lua
+python3 HoldTheDoor/tests/validate.py
+```
 
-### Multiplayer
-- On game start (and load), each side clears its local players' holding flags; a disconnected player's hold is cleaned up when the door's chunk loads via `OnLoadGridsquare`.
+The lifecycle harness runs the actual mod modules with strict API doubles, covering eligibility, damaged-door scaling, repeat cancellation, ownership races, stale packets, movement/death, destruction versus removal, save/load repair, lease expiry, action guards, input restoration, all four facing directions and pose setup/cleanup. Static validation checks Lua API names against Umbrella, English/Chinese key parity, metadata consistency, held-pose XML and require-path casing.
 
-### Race Conditions
-- **Idempotent cleanup**: `restoreDoor()` in the timed action uses a `_restored` guard flag — safe against double-call from `stop()` + `OnDestroyIsoThumpable` firing in the same tick.
-- **One holder per door**: `canHoldDoor()` rejects if `isDoorHeld()` is already true.
+These checks do not simulate Java animation playback, pathfinding, packet ordering inside the engine or the native fall state machine. Visual alignment and multiplayer behavior still need an eventual in-game smoke test.
 
-### Runtime Validation (`isValid()`)
-The timed action continuously checks and auto-cancels if:
-- Door object becomes nil or loses its grid square
-- Door is opened externally
-- Door HP drops to 0
-- Door gets barricaded while held
-
-## Edge Cases
-
-| Scenario | Behavior |
-|----------|----------|
-| Half-broken door (e.g. 50% HP) | Allowed — HP boost applies proportionally, restore also proportional |
-| Door opened by another mechanism while held | `isValid()` detects `IsOpen()=true`, action cancels, HP restored |
-| Player dies while holding | Timed action auto-stops, `stop()` runs cleanup |
-| Admin removes door | `OnObjectAboutToBeRemoved` clears player state, no knockdown |
-| Game saved mid-hold | `OnGameStart` + `OnLoadGridsquare` restore everything on next load |
-| Player disconnects (MP) | `OnPlayerDisconnect` clears player flag, door cleaned on chunk load |
-| Two players try to hold same door | Second player sees greyed-out "Hold It" with "Door is being held" tooltip |
-
-## Future Plans
-
-- Custom pushing/bracing animation
-- Window holding support (extensibility built into `HoldTheDoorShared`)
-- Multi-holder support (multiple players bracing one door)
-- MP networking layer (`sendClientCommand`/`sendServerCommand` for door HP sync)
-- Stamina drain while holding
+Reference links: [vanilla base timed action](https://github.com/Project-Zomboid-Community-Modding/ProjectZomboid-Vanilla-Lua/blob/main/shared/TimedActions/ISBaseTimedAction.lua), [vanilla open-door action](https://github.com/Project-Zomboid-Community-Modding/ProjectZomboid-Vanilla-Lua/blob/main/shared/TimedActions/ISOpenCloseDoor.lua), [game shove clip mirrored source](https://github.com/Niteghxst/Project-Zomboid-Media-Files/blob/main/media/anims_X/Bob/Bob_AimShove.X), [official door API](https://projectzomboid.com/modding/zombie/iso/objects/IsoDoor.html).
