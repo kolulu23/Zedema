@@ -1,0 +1,441 @@
+# Zombie Atlas
+
+**Zombie Atlas** is a static web app that makes the decompiled Project Zomboid Java source tree readable at a glance. It parses the `zombie/` package — 3,078 `.java` files, 4,749 types (1,671 of them nested), 270 packages, 724,991 non-comment code lines, 49,624 methods, 46,613 fields and 96,237 members — into a compact JSON bundle, and renders it as a treemap-first map in the spirit of the Firefox memory tree-map view: packages, types and members as nested rectangles, backed by four companion views for the class hierarchy, package dependencies, functional subsystems and computed insights. The extracted reference graph contributes 31,247 class-to-class and 4,096 package-to-package edges. Every number on screen is derived from the source itself — nothing is hand-curated — and the built app is served next to the raw tree, so "View source" always opens the exact file a figure came from.
+
+## Screenshots
+
+The headless smoke test writes its captures to `.pw-shots/` (gitignored). A fresh run produces:
+
+| File | Shows |
+| --- | --- |
+| `.pw-shots/01-treemap.png` | Root treemap — every package and type in the tree |
+| `.pw-shots/02-treemap-zoomed.png` | The same map after a double-click zoom, with breadcrumbs |
+| `.pw-shots/03-selection.png` | `IsoPlayer` selected: highlighted rectangle plus populated inspector |
+| `.pw-shots/04-source.png` | Source-viewer modal showing the decompiled file for the selected type |
+| `.pw-shots/05-hierarchy.png` | Inheritance forest with the root list |
+| `.pw-shots/06-dependencies.png` | Force-directed package graph |
+| `.pw-shots/07-matrix.png` | Package adjacency matrix with the class-edge list below it |
+| `.pw-shots/08-subsystems.png` | Domain bar and the per-domain cards |
+| `.pw-shots/09-insights.png` | Rankings and histograms |
+| `.pw-shots/10-treemap-light.png` | Treemap in the light theme |
+| `.pw-shots/11-groupby-stereotype.png` | Treemap regrouped by inferred stereotype |
+| `.pw-shots/12-members.png` | Member-level leaves inside types |
+
+The directory may also contain extra captures from earlier sessions (`A-root.png`, `B-iso.png`, `C-core.png`, `C-stereotype.png`). Regenerate the set with the smoke test:
+
+```bash
+npm test             # validate + smoke test
+node tools/smoke.mjs # smoke test only
+```
+
+## Quick start
+
+```bash
+npm install          # dependencies (Playwright is only needed for the smoke test)
+npm start            # extract the data, build, and serve → http://127.0.0.1:5184/
+```
+
+`npm start` runs the whole pipeline: it bundles the app into `dist/`, parses the
+decompiled tree into `dist/data/`, and serves both together with the raw
+sources. The generated JSON lives in exactly one place — inside the build
+output — and is never committed.
+
+Vite drives the pipeline itself through the `zombie-atlas-data` plugin in
+`vite.config.ts`, so `npx vite build` and `npx vite` do the right thing on their
+own; `tools/build.mjs` only exists to translate the flags below into the
+environment variables that plugin reads.
+
+| Command | What it does |
+| --- | --- |
+| `npm install` | Install dependencies. |
+| `npm run data` | Regenerate the JSON bundle into `dist/data/` (`node tools/extract.mjs`). |
+| `npm run validate` | Independently cross-check the generated bundle against the raw source. |
+| `npm run build` | `vite build` — bundles the app, then writes `dist/data/` from the plugin's `closeBundle` hook. |
+| `npm run dev` | `vite` — dev server on port 5183; generates the bundle on startup and regenerates it when the tree changes. |
+| `npm run serve` | Serve the existing `dist/` plus the raw sources at http://127.0.0.1:5184/. |
+| `npm start` | `npm run build` followed by `node tools/serve.mjs`. |
+| `npm run typecheck` | `tsc --noEmit`. |
+| `npm test` | `npm run validate` followed by the smoke test. |
+| `node tools/smoke.mjs [--url ...]` | Headless-browser test of all 66 checks; serves `dist/` itself unless `--url` is given, and writes screenshots to `.pw-shots/`. |
+| `sh tools/pw.sh <command>` | Run any command with the project-local Chromium and shared libraries on the path (the smoke test does this for itself). |
+
+Extra flags accepted by `tools/build.mjs`:
+
+| Flag | Effect |
+| --- | --- |
+| `--dev` | Extract, then run the Vite dev server instead of a production build. |
+| `--skip-data` | Reuse the existing `dist/data/` bundle (UI-only rebuild, ~0.2 s). |
+| `--src <dir>` | Decompile tree to read (overrides `ZOMBIE_SRC`). |
+| `--pretty` | Indent the emitted JSON (larger, easier to diff by hand). |
+
+### Pointing at your source tree
+
+`zombie/` is a decompilation artefact: it is gitignored, belongs to a specific
+game build, and may live anywhere on disk. The atlas therefore never assumes a
+fixed location. The extractor, the validator, the dev middleware and the static
+server all resolve the tree the same way, first hit wins:
+
+1. `--src <dir>` on the command line
+2. the `ZOMBIE_SRC` environment variable
+3. `ZOMBIE_SRC` in a `.env` file (`zombie-atlas/.env`, then the repository root `.env`)
+4. `<repository root>/zombie`
+5. `./zombie` relative to the current working directory
+
+Relative values are tried against the current working directory and then the
+repository root, so both of these work:
+
+```bash
+ZOMBIE_SRC=../zombie npm run build                      # sibling of zombie-atlas/
+ZOMBIE_SRC=/opt/pz/42.13.0/decompiled npm run build     # anywhere on disk
+node tools/build.mjs --src ~/dumps/pz-42.20 --pretty
+```
+
+If you name a directory explicitly and it does not exist, the build fails with
+the list of paths it tried instead of silently falling back to a default.
+
+The last path segment of the source directory becomes the URL mount used by the
+source viewer, so a tree at `/opt/pz/decompiled` is served as
+`/src/decompiled/**`. That is also why "View source" keeps working after you
+move the tree: the class records in the bundle store paths as
+`<mount>/<path inside the tree>`, and the server maps the mount back to wherever
+you pointed it. Requests for a mount this build does not serve return a 404
+rather than the SPA's HTML.
+
+`ZOMBIE_DATA_OUT` (or `--out <dir>`) relocates the generated bundle if you would
+rather keep it outside the project.
+
+## How it works
+
+The whole dataset is produced by one extractor, `tools/extract.mjs` (`npm run data`). It is a plain Node ESM script with no dependencies and no build step.
+
+1. **Lex.** `tools/lib/java-lexer.mjs` masks comments, string and char literals and text blocks before any regex runs, so declarations are never matched inside prose or literals. Brace depth is tracked so every declaration can be attributed to the right type.
+2. **Extract, per file.** Package, imports (static and on-demand `*` imports kept distinct), and the file's line accounting.
+3. **Extract, per type.** Declarations of `class`, `interface`, `enum`, `record` and `@interface` with their nesting, modifiers, annotations and nearest preceding javadoc; fields; methods and constructors (return type, parameter types, `throws`, modifiers, annotations, declaration line, body line count, per-method complexity); enum constants; and a per-type line count. A nested type is charged only its own span, while the outermost type in a file owns the whole file — imports, licence header and trailing comments included — so package totals never double count an inner class.
+4. **Score.** Complexity is `1 +` every `if`, `for`, `while`, `case`, `catch`, `&&`, `||` and `?:`. Branch density is complexity per code line. A **stereotype** is inferred from the declaration itself: `@UsedFromLua` becomes `lua-api`, `*Manager` becomes `manager`, `*Packet` becomes `packet`, and so on through `interface`, `enum`, `record`, `exception`, `abstraction`, `ui`, `factory`, `utility`, `event`, `debug`, `abstract`, `data` and finally `class`.
+5. **Resolve.** Supertypes, interfaces and member type references are mapped to internal ids by trying the fully-qualified name first, then `zombie.<name>`, then a global simple-name index whose ties are broken by preferring a type in the same package, then `zombie.*`, then a top-level (non-nested) bearer. Genuinely ambiguous references resolve to nothing and are treated as external.
+6. **Build the reference graph.** Three sources feed one class-to-class edge table:
+   - non-static, file-level imports, attributed to the file's top-level types only (a nested type does not inherit its outer class's import list), with `.*` imports expanded to every type in the target package;
+   - fully-qualified `zombie.*` names found inside type bodies, resolved to the longest known type prefix and attributed to the innermost declaring type containing them;
+   - member type references (return and parameter types) resolved through the same-package index and the file's imports.
+7. **Aggregate.** The nested package tree is built bottom-up with per-node metrics, own types and subtree type lists; functional domains are derived from the second package segment (55 domains under `zombie.`); fan-in, fan-out and per-domain hub types are computed.
+8. **Emit.** The JSON bundle lands in `dist/data/` (see [Data bundle reference](#data-bundle-reference)). The `zombie-atlas-data` plugin runs this step from Vite's `closeBundle` hook — after the app has been written and after `emptyOutDir` — and from the dev server's startup and file watcher, so one tool owns the whole pipeline. `insights.json` precomputes the rankings and histograms the UI would otherwise have to scan the whole member space for.
+9. **Verify.** `tools/validate.mjs` re-checks the result against the raw source with an independent scanner (see [Validation](#validation)).
+
+Metrics recorded per type (their meaning is echoed in `meta.json` so the bundle is self-describing):
+
+| Metric | Meaning |
+| --- | --- |
+| `code` | Non-blank, non-comment source lines |
+| `loc` | Total source lines |
+| `comment` / `blank` | Comment-only and blank lines |
+| `bytes` | UTF-8 bytes of the type's source span (the outermost type in a file covers the whole file) |
+| `methods` / `fields` | Declared methods and constructors / declared fields |
+| `members` | Methods + fields + enum constants |
+| `complexity` | Sum of `1 +` branch points (`if`/`for`/`while`/`case`/`catch`/`&&`/`||`/`?:`) |
+| `fanIn` / `fanOut` | Distinct types in the tree that reference this type / that this type references |
+| `luaExposed` | Types carrying `@UsedFromLua` |
+
+## Views
+
+Tab between views with the top bar or the `1`–`5` keys. All five share the sidebar (view controls plus a legend), the breadcrumb bar and the status bar; the status bar always reports how many types pass the current filters, the package count, the code-line total, a view-specific line, and the active metric, colour mode and grouping.
+
+### 1. Treemap
+
+Canvas treemap of the whole tree: packages → types → members as nested rectangles, laid out with `d3-hierarchy`.
+
+- **Click** selects a type or package and fills the inspector; **double-click** a group zooms into it (a leaf focuses that type); **right-click** zooms back to the root; breadcrumbs and the `Up` / `Root` stage buttons navigate the same zoom path.
+- **Hover** shows a full readout: kind and stereotype, code and comment lines, method and field counts, complexity, fan-in/fan-out, Lua annotations, enum constants and the rectangle's share of the map. Group rectangles report aggregate type, code, method, complexity and Lua totals instead.
+- Labels are fitted to the available space and can be toggled; padding, depth limit and a "hide below N% of total" cull keep large trees readable.
+- Stage actions: layout shortcuts (squarified / slice / binary), a types-or-members leaf toggle, `Up`, `Root`, **PNG** export (downloads `zombie-atlas-<metric>-<colour>.png`) and **JSON** export (downloads `zombie-atlas-selection.json` — every type passing the current filters with its metrics, heritage and source path).
+
+### 2. Hierarchy
+
+The inheritance forest, built from the 3,340 types with no internal supertype.
+
+- The root list is ranked by subtree size (also sortable by name or kind) and is capped at 400 rows; the text filter matches roots and their subtrees, and the `interfaces` / `lua only` checkboxes narrow the list.
+- The tree pane expands and collapses with carets, draws inheritance connectors, shows `implements` relations as dashed entries when `interfaces` is on, and labels each row with kind badge, code size, Lua badge and hidden-subtype count.
+- Selecting a type anywhere in the app auto-reveals and expands its chain in this view; `Collapse all` and `Expand two levels` are available from the stage actions.
+
+### 3. Dependencies
+
+Three modes over the same package graph, switched from the stage actions.
+
+| Mode | Contents |
+| --- | --- |
+| `graph` | Force-directed package graph (`d3-force`). Node radius scales with code size, colour comes from the functional domain, hover dims everything that is not a neighbour and shows code, linked-package counts and total refs. Scroll to zoom around the cursor, drag empty space to pan, drag a node to pin it, double-click a node to centre and zoom on it, double-click empty space (or press `Fit`) to frame the whole graph, and use the `−` / `+` buttons for stepped zoom. Click a node to select its package in the inspector. A press only becomes a drag after the pointer travels ~3px, and gestures are tracked on the window, so panning keeps following the pointer outside the canvas. Pan and zoom are preserved across clicks, mode switches and view changes — the force layout is only recomputed when the node set actually changes, and only `Fit`, a double-click on empty space or a graph rebuild re-frames it. |
+| `matrix` | Adjacency matrix of the busiest packages — row = importing package, column = imported package, cell = number of class-level references. Hovering a cell shows the count and its share of the row; clicking one opens the class-level edges between that pair. |
+| `classes` | The class-edge list for the pair picked in the matrix (or for the selected package), heaviest first. |
+
+Graph controls: how many top packages to keep (default 40, range 6–270), the minimum edge weight (default 3) and a `cross-domain only` switch.
+
+### 4. Subsystems
+
+The functional layout of the engine.
+
+- A proportional bar of all 55 domains, ordered by size, with a clickable legend — clicking a segment or a card filters the treemap to that domain and switches to it.
+- One card per domain carrying its description, code lines, types, methods, complexity, share of the codebase and Lua-exposed type count, plus bars for size, branch density, cross-package coupling (fan-in/fan-out) and type mix (classes/interfaces/enums/records), the number of packages it owns and its key hub types by fan-in.
+- Cards can be sorted by code, types, complexity, fan-in, Lua surface or name.
+
+### 5. Insights
+
+Twelve cards computed at extraction time and served from `insights.json`.
+
+- **Empty results explain themselves.** If the active filters exclude every type,
+  the stage shows what is filtering (`query "IsoPlayer" · domains: iso`) with
+  **Clear filters** and **Reset view** buttons instead of a blank canvas.
+- **Most complex methods** (togglable between complexity, branch count and body lines), **Largest types**, **Most depended-upon (fan-in)**, **Biggest reusers (fan-out)**, **Highest branch density**, **Most annotated methods** (the largest `@UsedFromLua` surface per type) and **Strongest package coupling** — each ranking row selects the type (or jumps to the package pair in the Dependencies view).
+- Histograms of declaration kinds, stereotypes, annotations and largest packages, plus a **Scale** card listing the bundle's headline counts.
+
+The right-hand **inspector** is shared by every view: it shows the project overview when nothing is selected, and for a type it lists the badges (kind, Lua API status), metrics, the internal superclass chain, direct subtypes, the full member list with a filter, and the "depends on" / "used by" neighbours, with buttons to open the source, show the type in the hierarchy or copy the fully-qualified name. For a package it shows the package metrics, its sub-packages, and the types it declares (largest first, capped at 60) with buttons to zoom the treemap there or clear the filters.
+
+## Customising the map
+
+Everything in this section is a control in the sidebar, a stage action or a filter chip, and every setting is persisted.
+
+| Setting | Options |
+| --- | --- |
+| Size metric | Code lines (non-comment), total lines, file size, method count, field count, members, cyclomatic complexity, fan-in (used by), fan-out (uses), Lua exposure, branch density, or a custom composite |
+| Custom composite | Weight sliders (0–1) for code, complexity, methods, fan-in, Lua exposure and file size |
+| Colour by | Functional domain, package, declaration kind, stereotype, fan-in heat, fan-out heat, complexity heat, branch density heat, Lua exposure, nesting depth |
+| Group by | Package hierarchy, functional domain, stereotype, declaration kind, stereotype → domain |
+| Layout | Squarified, slice & dice, binary, strips (plain `treemapSlice` — not d3's `resquarify`, which only exists to keep a squarified layout stable across updates) |
+| Sort | Size, name, fan-in, complexity |
+| Depth limit | 0 (unlimited) to 6 package levels |
+| Padding | 0–8 px between rectangles |
+| Hide below N% of total | Culls rectangles smaller than a share of the whole map |
+| Leaves | Types or members (`M`) |
+| Labels | On (adaptive) or off |
+
+Filters:
+
+| Filter | Behaviour |
+| --- | --- |
+| Text query | Matches type names, fully-qualified names, packages, stereotypes, annotations and — once member shards are loaded — member names. The search box also offers ranked class and package suggestions; choosing one selects the type or zooms the treemap to the package. |
+| Kind chips | Declaration kinds (class, interface, enum, record, annotation) |
+| Stereotype chips | The twelve most common inferred stereotypes, with counts |
+| Domain chips | All 55 functional domains, with type and code-line counts on hover |
+| Lua only | Restrict to `@UsedFromLua` types |
+| Minimum code lines | Drop types below a code-line threshold |
+
+A `Clear N filters` button appears whenever any filter is active.
+
+**Persistence.** Settings live in `localStorage` under `zombie-atlas.settings.v1`. The URL hash carries the shareable state — view (`v`), metric (`m`), colour mode (`c`), grouping (`g`), layout (`l`), theme (`t`), depth (`d`), member leaves (`mm`), query (`q`), Lua filter (`lua`), domains (`dom`), kinds (`k`), stereotypes (`st`), zoom path (`z`) and selected type (`sel`) — and is re-applied on load and on `hashchange`. The **Permalink** button in the stage actions copies the current link to the clipboard.
+
+## Persistence & recovery
+
+Configuration lives in `localStorage` under a single key:
+
+```
+zombie-atlas.settings.v1  →  { version, theme, sizeMetric, weights, colorMode, palette,
+                               groupBy, layout, depthLimit, showMembers, labelMode,
+                               padding, minShare, sort, sidebar, inspector,
+                               filters: { query, kinds, stereotypes, domains, luaOnly, minCode } }
+```
+
+Nothing else is stored — no cookies, no `sessionStorage`, no IndexedDB, no
+service worker. The view, zoom path, selection and the filter summary travel in
+the URL hash instead, so a permalink reproduces a screen without touching
+storage. Seven settings are storage-only and return to their defaults if it is
+cleared: `palette`, `labelMode`, `padding`, `minShare`, `sort`, `sidebar`,
+`inspector`.
+
+**Reads are validated field by field.** `coerceSettings()` builds the settings
+object from the documented defaults and only accepts a stored value that has the
+right type and range, so a truncated, hand-edited or future-version payload
+degrades to defaults instead of breaking the UI. The result is written back on
+the next pass, which means storage repairs itself on load. The sidebar says what
+happened ("No saved settings found — defaults written.", "Saved settings
+repaired on load (19 fields).") and the tooltip on that line lists every repair.
+
+To start over:
+
+| Where | Action |
+| --- | --- |
+| View controls → **Restore defaults** | Discards every saved setting and writes the defaults back |
+| Console | `zombieAtlas.store.resetSettings()`, or read `zombieAtlas.store.storage` for the load report |
+| Empty-state overlay | **Clear filters** (keeps zoom) or **Reset view** (also clears zoom, selection, culling) |
+
+If a filter still applies after clearing storage, the URL hash is re-applying it
+— drop the `#…` part of the address as well.
+
+## Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| `/` | Focus the search box |
+| `Esc` | In the search box, clear the query; otherwise zoom out one treemap level, or clear the selection at the root |
+| `1` … `5` | Switch to Treemap, Hierarchy, Dependencies, Subsystems, Insights |
+| `T` | Toggle the light/dark theme |
+| `S` | Toggle the sidebar |
+| `I` | Toggle the inspector |
+| `M` | Toggle member-level leaves |
+| `?` | Open the help dialog |
+| `ArrowUp` / `ArrowDown` / `Enter` | Move through and accept search results |
+
+Shortcuts are ignored while a text field, select or textarea has focus. Mouse: click selects, double-click zooms or focuses, right-click zooms out to the root, hover reads out the rectangle under the cursor. In the Dependencies graph the wheel zooms and dragging empty space pans.
+
+Every panel scrolls independently: the control sidebar, the inspector, and the Hierarchy, Subsystems, Dependencies and Insights panes each own their scroll container, so long lists never push content out of reach.
+
+## Data bundle reference
+
+The bundle is generated straight into `dist/data/`, where both the dev server
+and the production server read it from; it is never committed. Sizes are from
+the current build and drift slightly with each regeneration.
+
+| File | Size | Contents |
+| --- | --- | --- |
+| `meta.json` | ~3 KB | Generation timestamp, source root and its mount, decompiler string, headline counts, domain descriptions, the column lists for `classes.json` and the member shards, and the metric glossary. |
+| `packages.json` | ~86 KB | Nested package tree with per-node aggregates (code, lines, methods, complexity, Lua counts, fan-in/fan-out). |
+| `classes.json` | ~923 KB | Compact columnar records for all 4,749 types; the column names are documented in `meta.json`. |
+| `hierarchy.json` | ~13 KB | Ids of the types with neither an internal supertype nor an interface (the Hierarchy view derives its root list from `classes.json` at runtime). |
+| `deps-packages.json` | ~202 KB | 4,096 `[from, to, weight]` package edges, heaviest first. |
+| `deps-classes.json` | ~408 KB | Class-to-class edges, loaded lazily when a class-level edge list is requested. |
+| `insights.json` | ~41 KB | Top methods by complexity (with body line and branch counts), the rankings, the histograms and the package-coupling table. |
+| `members/<slug>.json` | 266 shards, ~9.7 MB total | Per-package member lists keyed by class id (methods with parameters, throws, modifiers, annotations, line, complexity, body lines and javadoc, plus fields and enum constants). Loaded on demand; the slug is the package with `.` replaced by `__`. |
+
+The bundle is about 11.5 MB in total: roughly 1.7 MB of JSON loaded eagerly and 9.7 MB of member shards fetched on demand.
+
+## Validation
+
+`npm run validate` (`node tools/validate.mjs`, plus `--verbose`) deliberately does **not** reuse the extractor's lexer: it re-reads the raw tree with independent, naive regexes and compares the result with the generated bundle, reporting discrepancies per file so a parser regression is visible instead of silent.
+
+```
+{
+  "filesChecked": 3078,
+  "types": { "parsed": 4749, "naive": 4749 },
+  "methods": { "parsed": 49624, "naive": 46533 },
+  "heritage": { "checked": 2239, "resolved": 2041, "external": 187, "internalCoverage": "99.5%" },
+  "membersTotal": 67691,
+  "problemCount": 2892
+}
+```
+
+- **Types.** 4,749 parsed against 4,749 found by the naive scan — an exact match, with zero `[type-miss]` entries.
+- **Methods.** The parser records 49,624 callable declarations (methods plus constructors) against the naive scan's 46,533. The parser finds more because the naive regex requires leading modifiers and a single line, so it misses constructors of interfaces and records, interface methods without modifiers, and multi-line signatures. Declarations that live inside another member's body (anonymous and local classes) are counted separately as `nestedDeclarationsSkipped` (278) rather than reported as misses.
+- **Heritage.** Of 2,239 `extends`/`implements` clauses checked, 2,041 resolve to types inside the tree and 187 point at external JDK/Kahlua types (`RuntimeException`, `Thread`, `ArrayList`, `Iterator`, `JavaFunction`, …) — an internal coverage of 99.5%. The remaining 11 lines are ambiguous re-declarations of the same simple name in one file; each was inspected by hand and resolves correctly in the shipped bundle.
+- **Exit code.** The tool exits non-zero when discrepancies exceed 5% of the files checked, and prints the first 40 of them (`--verbose` prints all). Because the naive scanner raises far more false alarms than the parser has real misses, read the per-file lines rather than the exit status: it is a smoke alarm on the parser, not a clean bill of health for the scanner.
+
+### Browser smoke test
+
+`node tools/smoke.mjs [--url http://127.0.0.1:5184/]` loads the built SPA in headless Chromium, exercises every view and the main interactions, fails on console errors or missing DOM, and writes the screenshots listed above. Its 66 checks cover loading, the painted treemap, hover, zooming (including a second double-click inside a zoomed view, which used to snap back to the root, and a zoom path that names an id no longer on the way down), search and selection, the source viewer, the hierarchy, the dependency graph and matrix, the domain cards and their treemap filter, the insight cards, theming, metric and grouping switches, member-level leaves (a run takes the treemap from 557 to 13,717 leaves), the help dialog, the JSON export download, the permalink round-trip, panel scrolling (every scroll container must reach its bottom edge at both 1680x1000 and 1280x720), dependency wheel zoom in/out, drag-panning and post-fit layout stability, the source mount plumbing (a class's own file must be fetchable from `/src/<mount>/`, and an unknown mount must 404 rather than return HTML), the empty-state recovery path (a filter set that matches nothing must explain itself and offer Clear filters / Reset view, and the search box must show the query that is actually filtering), the persistence layer (defaults are rewritten after a storage wipe, a payload with the wrong type in every field is repaired field by field, and the Restore defaults button resets both state and storage), and a console-error sweep. It starts and stops its own server, and picks up the project-local Chromium (`.pw-browsers/`) and shared libraries (`.pw-libs/`) automatically, so `npm test` works without any wrapper.
+
+### Showcase trailer
+
+`sh tools/pw.sh node tools/trailer.mjs` films the running app for a showcase
+trailer. It drives **real mouse and keyboard input** through the whole product —
+treemap hover, selection, zoom and breadcrumb walk-back; the size, colour,
+grouping, layout and culling controls; the filter chips; ranked search and the
+source viewer; the hierarchy forest; the dependency graph, adjacency matrix and
+class-edge list; the domain cards and their treemap filter; the insight rankings;
+the light theme; the help dialog and the permalink — and records the **page
+viewport** rather than the desktop, so the video contains the application and
+nothing else.
+
+Output lands in `.pw-video/`: `zombie-atlas-trailer.mp4` (H.264, 30 fps,
+yuv420p, faststart, written when an ffmpeg binary is available — otherwise a
+VP8 `.webm`), one screenshot per checkpoint in `.pw-video/frames/` for
+eyeballing a take without decoding it, and a per-beat report with timings and
+any console error. A synthetic pointer with a click ripple and the intro/outro
+title cards are injected into the page (a headless browser films no OS cursor);
+`--no-cursor` and `--no-cards` leave the app's own pixels untouched. The other
+flags are `--url`, `--width`, `--height`, `--out`, `--trim` and `--no-encode`,
+and the load-time lead-in is trimmed automatically so the film opens on the
+title card. Every beat is non-fatal: a selector that stops matching is reported
+and skipped instead of ending the take.
+
+## Project layout
+
+```
+zombie-atlas/
+  index.html              App shell: top bar, sidebar, canvas stage, inspector, status bar
+  package.json            Scripts and dependencies
+  vite.config.ts          Vite config + the data plugin: /data/** and /src/<mount>/** middleware,
+                          bundle generation on build and regeneration on source change
+  tsconfig.json           Strict TypeScript, ES2022, noEmit
+  src/
+    main.ts               Bootstrap, view switching, controls, legend, breadcrumbs, exports, help
+    data.ts               Bundle loading, indexes, filtering, metric accessors
+    state.ts              Observable store, localStorage settings, URL-hash permalinks
+    util.ts               Formatting, colour ramps, canvas text fitting
+    styles.css            Themes and layout
+    views/
+      treemap.ts          Canvas treemap, zoom, labels, tooltip, exports
+      hierarchy.ts        Inheritance forest
+      dependencies.ts     Force graph, adjacency matrix, class-edge list
+      subsystems.ts       Domain bar and cards
+      insights.ts         Rankings and histograms
+      inspector.ts        Right-hand detail panel
+      source.ts           Source-viewer modal
+  tools/
+    extract.mjs           The extractor; writes the JSON bundle
+    build.mjs             Flag-friendly front-end for Vite (--dev, --skip-data, --src)
+    lib/config.mjs        Source/output discovery (ZOMBIE_SRC, --src, .env)
+    validate.mjs          Independent cross-check of the bundle
+    serve.mjs             Production server: dist/ plus /src/<mount>/**
+    smoke.mjs             Headless-browser smoke test
+    trailer.mjs           Records the showcase trailer (viewport capture + encode)
+    pw.sh                 Runs a command with the bundled Chromium and libraries
+    lib/java-lexer.mjs    Comment/string masking, brace depth, signature helpers
+  dist/                   Generated app bundle and dist/data/ JSON bundle (gitignored)
+  .pw-shots/              Smoke-test screenshots (gitignored)
+  .pw-video/              Trailer output: mp4/webm, checkpoint frames (gitignored)
+  .pw-browsers/, .pw-libs/  Local Chromium and extracted libraries (gitignored)
+```
+
+The stack is TypeScript and Vite 8 with no UI framework: `d3-hierarchy` for the treemap, `d3-force` for the dependency graph, `d3-scale`/`d3-selection` for supporting work, and direct canvas 2D rendering for both. After boot a debug handle is exposed for automation: `window.zombieAtlas = { store, atlas, treemap, view }`.
+
+## Requirements & regenerating the data
+
+The app needs a dataset; the dataset needs the decompiled source.
+
+- The source tree defaults to `<repository root>/zombie` and can be moved
+  anywhere — see [Pointing at your source tree](#pointing-at-your-source-tree).
+  `zombie/` itself is gitignored; materialise it from the workspace root with
+  `sh scripts/update_api_reference.sh`, which decompiles the locally installed
+  game, restores a cached snapshot, or fetches a pinned source set.
+- The shipped dataset was produced from **"Decompiled with Zomboid Decompiler
+  v0.3.2 using Vineflower."** — the exact string, the resolved source path, where
+  it came from (`--src`, `ZOMBIE_SRC`, `.env` or default) and the URL mount are
+  all recorded in `meta.json`.
+
+```bash
+npm run build                                    # data + bundle, default source
+ZOMBIE_SRC=/path/to/decompiled npm run build     # data + bundle, explicit source
+node tools/extract.mjs --out /tmp/atlas-data     # bundle somewhere else
+node tools/extract.mjs --pretty                  # indented JSON for diffing
+```
+
+- Node.js with npm is the only build requirement; the pipeline is plain Node ESM
+  and the app has no runtime dependencies beyond the bundled `d3-*` packages.
+- The smoke test needs Chromium and its shared libraries. Neither is installed
+  system-wide in this sandbox, so both ship inside the project: `.pw-browsers/`
+  (installed with `npx playwright install chromium`) and `.pw-libs/`, which was
+  populated with `apt-get download` plus `dpkg-deb -x` when the system libraries
+  were missing. `tools/pw.sh` exports `PLAYWRIGHT_BROWSERS_PATH` and
+  `LD_LIBRARY_PATH` for both and execs the command it is given:
+
+```bash
+sh tools/pw.sh node tools/smoke.mjs
+sh tools/pw.sh node tools/smoke.mjs --url http://127.0.0.1:5184/
+```
+
+- `npm run dev` keeps the atlas in step with the tree: it generates the bundle
+  when the server starts and regenerates it (about 2.5 s for all 3,078 files,
+  debounced to 400 ms) whenever a `.java` file under the source directory is
+  added, changed or removed, then triggers a browser reload. Re-extraction runs
+  in the Vite process, so nothing else needs to be running. Set
+  `ZOMBIE_ATLAS_SKIP_DATA=1` to disable both the generation and the watcher.
+
+- For a plain static host, copy `dist/` and make sure whatever serves it also
+  exposes the source tree at `/src/<mount>/**` (mount = the source directory's
+  last path segment), otherwise the source viewer will report that it cannot
+  load a file. The rest of the app works without it.
+
+## Limitations
+
+- **Static source metrics, not runtime behaviour.** Complexity, branch density, fan-in and fan-out describe the code as written. A class that is central at runtime but small and lightly referenced in source will look small here, and nothing in the atlas measures hot paths, timings or coverage.
+- **The reference graph approximates coupling.** Edges come from imports, inline fully-qualified references and member type references. Reflection, string-based lookup, Lua and zedscript call sites, and data-driven wiring are invisible; an import creates an edge even when nothing in the file uses it; and a simple name that is genuinely ambiguous is dropped rather than guessed.
+- **Decompiled code contains synthetic constructs.** Generated accessors and bridge methods, `$`-suffixed names and synthetic casts are part of the source the parser reads, so member counts and complexity can include code the original developer never wrote.
+- **Supertypes outside the tree are external.** JDK and Kahlua base types cannot be resolved, so a type inheriting only from an external class appears as a hierarchy root, and heritage validation covers the internal share (99.5% of in-tree references) rather than everything.
+- **Display culling and caps.** The treemap hides rectangles below the configured share of the map, and the hierarchy root list renders the first 400 roots (use its filter to reach the rest); the status bar's type count reflects filters, not what is currently drawn.
+- **Byte sizes are spans, not sums.** A type's `bytes` is the UTF-8 size of its source span: the outermost type in a file is charged the whole file (imports, licence header and trailing comments included) and each nested type only its own span, so a file's size is not the sum of the types it declares.

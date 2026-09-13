@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zombie Atlas — Project Zomboid source map</title>
+    <meta
+      name="description"
+      content="Interactive treemap, hierarchy and dependency atlas generated from the decompiled Project Zomboid source tree."
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d1117'/%3E%3Crect x='5' y='5' width='10' height='22' fill='%234ec9b0'/%3E%3Crect x='17' y='5' width='10' height='9' fill='%23e8b84b'/%3E%3Crect x='17' y='16' width='10' height='11' fill='%23d16d9e'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-text">Zombie<b>Atlas</b></span>
+          <span class="brand-sub" id="brand-sub">loading…</span>
+        </div>
+        <nav class="tabs" id="tabs" role="tablist" aria-label="Views"></nav>
+        <div class="topbar-right">
+          <div class="search-wrap">
+            <input
+              id="search"
+              class="search"
+              type="search"
+              placeholder="Search classes, packages, members…  (/)"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search"
+            />
+            <div id="search-results" class="search-results" hidden></div>
+          </div>
+          <button id="btn-settings" class="icon-btn" title="Customize (S)" aria-label="Customize">⚙</button>
+          <button id="btn-theme" class="icon-btn" title="Toggle theme (T)" aria-label="Toggle theme">◐</button>
+          <button id="btn-help" class="icon-btn" title="Help (?)" aria-label="Help">?</button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="sidebar" id="sidebar">
+          <section class="panel" id="panel-controls">
+            <h2>View controls</h2>
+            <div id="controls"></div>
+          </section>
+          <section class="panel" id="panel-legend">
+            <h2>Legend</h2>
+            <div id="legend"></div>
+          </section>
+        </aside>
+
+        <main class="stage" id="stage">
+          <div class="stage-head">
+            <nav class="breadcrumbs" id="breadcrumbs" aria-label="Zoom path"></nav>
+            <div class="stage-actions" id="stage-actions"></div>
+          </div>
+          <div class="canvas-wrap" id="canvas-wrap">
+            <canvas id="canvas"></canvas>
+            <svg id="overlay" class="overlay"></svg>
+            <div id="tooltip" class="tooltip" hidden></div>
+            <div id="empty-state" class="empty-state" hidden></div>
+            <div id="stage-message" class="stage-message" hidden></div>
+          </div>
+          <div class="stage-foot" id="stage-foot"></div>
+        </main>
+
+        <aside class="inspector" id="inspector">
+          <div id="inspector-body" class="inspector-body"></div>
+        </aside>
+      </div>
+
+      <footer class="statusbar" id="statusbar"></footer>
+    </div>
+
+    <div id="modal-root"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
