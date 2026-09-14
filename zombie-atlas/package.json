@@ -10,8 +10,8 @@
     "serve": "node tools/serve.mjs",
     "start": "node tools/build.mjs && node tools/serve.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node tools/validate.mjs && node --import ./tools/test/ts-resolve.mjs --test tools/test/unit && node tools/test/runner.mjs",
-    "test:unit": "node --import ./tools/test/ts-resolve.mjs --test tools/test/unit",
+    "test": "node tools/validate.mjs && node --import ./tools/test/ts-resolve.mjs --test tools/test/unit/*.test.mjs && node tools/test/runner.mjs",
+    "test:unit": "node --import ./tools/test/ts-resolve.mjs --test tools/test/unit/*.test.mjs",
     "test:browser": "node tools/test/runner.mjs",
     "test:shots": "node tools/test/runner.mjs --shots"
   },

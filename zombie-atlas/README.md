@@ -58,7 +58,7 @@ environment variables that plugin reads.
 | `npm run typecheck`                | `tsc --noEmit`.                                                                                                                |
 | `npm test`                         | `npm run validate`, then the unit tests, then the browser suite.                                                               |
 | `npm run test:unit`                | Pure Node tests: locale catalogs, no browser or dataset needed.                                                                |
-| `npm run test:browser`             | The browser suite. Starts its own server on a free port unless `--port`/`--url` is given.                                      |
+| `npm run test:browser`             | The browser suite. Starts its own server on a free port, unless `--port` names one — or `--url` names an external deployment, in which case nothing local is started. |
 | `npm run test:shots`               | The browser suite, also writing screenshots to `.pw-shots/`.                                                                   |
 | `node tools/test/runner.mjs --spec treemap` | Run one spec (matched by filename). Add `--list` to see them, `--bail` to stop at the first failing spec.             |
 | `sh tools/pw.sh <command>`         | Run any command with the project-local Chromium and shared libraries on the path (the test runner does this for itself).      |
@@ -430,7 +430,10 @@ zombie-atlas/
                           bundle generation on build and regeneration on source change
   tsconfig.json           Strict TypeScript, ES2022, noEmit
   src/
-    main.ts               Bootstrap, view switching, controls, legend, breadcrumbs, exports, help
+    main.ts               Bootstrap: mounts the shell, then wires views, controls, search,
+                          breadcrumbs, exports and the render loop
+    app/
+      app.tsx             The shell markup (topbar, sidebar, stage, inspector, status bar)
     util.ts               Formatting, DOM helper, canvas text fitting
     domain/               The extracted dataset. Pure: no DOM, no i18n, no store.
       types.ts            ClassRec / PkgNode / MemberRec / Atlas and friends

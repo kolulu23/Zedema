@@ -53,7 +53,7 @@ test('the shell markup only references known messages', () => {
   // `msg()` key is already compile-checked (`MessageKey`); what this adds is
   // coverage of the shell file itself, so a literal that was never wrapped in
   // `msg()` shows up as a key that does not exist.
-  const shell = fs.readFileSync(path.join(ROOT, 'src', 'app', 'App.tsx'), 'utf8');
+  const shell = fs.readFileSync(path.join(ROOT, 'src', 'app', 'app.tsx'), 'utf8');
   const missing = [];
   for (const [, key] of shell.matchAll(/\bmsg\(\s*'([^']+)'/g)) {
     if (!Object.hasOwn(en, key)) missing.push(key);
@@ -67,6 +67,6 @@ test('the shell no longer relies on data-i18n attributes', () => {
   // be silently overwritten.
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.ok(!html.includes('data-i18n'), 'index.html still carries data-i18n attributes');
-  const shell = fs.readFileSync(path.join(ROOT, 'src', 'app', 'App.tsx'), 'utf8');
-  assert.ok(!shell.includes('data-i18n'), 'App.tsx still carries data-i18n attributes');
+  const shell = fs.readFileSync(path.join(ROOT, 'src', 'app', 'app.tsx'), 'utf8');
+  assert.ok(!shell.includes('data-i18n'), 'the shell still carries data-i18n attributes');
 });

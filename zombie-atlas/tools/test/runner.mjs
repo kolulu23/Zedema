@@ -77,9 +77,13 @@ const recorder = createRecorder({
 });
 
 const started = Date.now();
-const { reused, url: serverUrl } = await startServer({ port: opts.port });
-const url = opts.url ?? serverUrl;
-console.log(`zombie-atlas tests · ${url}${reused ? ' (existing server)' : ''} · ${files.length} specs`);
+// `--url` means "test this deployment", so a local server must not be started:
+// on a checkout without a usable `dist/` the local probe never succeeds and the
+// run aborts after the timeout, never reaching the URL that was asked for.
+const server = opts.url ? null : await startServer({ port: opts.port });
+const url = server?.url ?? opts.url;
+const origin = server ? (server.reused ? ' (existing server)' : '') : ' (external url)';
+console.log(`zombie-atlas tests · ${url}${origin} · ${files.length} specs`);
 if (!opts.shots) console.log('(screenshots off — pass --shots to write .pw-shots/)');
 
 const browser = await launchBrowser();

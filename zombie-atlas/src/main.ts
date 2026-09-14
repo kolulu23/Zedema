@@ -3,7 +3,7 @@ import { msg, trLabel, initLanguage } from './i18n';
 /**
  * Zombie Atlas — application bootstrap.
  *
- * Renders the shell (see `app/App.tsx`), then wires the store, the views, the
+ * Renders the shell (see `app/app.tsx`), then wires the store, the views, the
  * customisation sidebar, search, breadcrumbs and the render loop together.
  * Everything the UI shows is derived from the JSON bundle produced by
  * `tools/extract.mjs`.
@@ -13,7 +13,7 @@ import { msg, trLabel, initLanguage } from './i18n';
  */
 
 import './styles.css';
-import { App } from './app/App';
+import { App } from './app/app';
 import {
   type Atlas,
   type ClassRec,
