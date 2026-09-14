@@ -190,6 +190,7 @@ select, input[type='number'], input[type='text'] {
   width: 100%; background: var(--bg-2); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 4px 6px; outline: none;
 }
+.language-select { width: auto; flex: 0 0 auto; max-width: 110px; }
 select:focus, input:focus { border-color: var(--accent); }
 input[type='range'] { width: 100%; accent-color: var(--accent); }
 input[type='checkbox'] { accent-color: var(--accent); }
@@ -228,11 +229,11 @@ input[type='checkbox'] { accent-color: var(--accent); }
 .breadcrumbs .crumb.last { color: var(--fg-0); font-weight: 600; }
 .breadcrumbs .sep { color: var(--fg-3); font-size: 10px; }
 .stage-actions { display: flex; gap: 4px; align-items: center; flex: none; }
-.stage-actions button {
+.stage-actions button, .graph-controls button {
   background: var(--bg-2); border: 1px solid var(--border); color: var(--fg-1);
   border-radius: var(--radius); padding: 3px 8px; cursor: pointer; white-space: nowrap; font-size: 11.5px;
 }
-.stage-actions button:hover { background: var(--bg-hover); color: var(--fg-0); }
+.stage-actions button:hover, .graph-controls button:hover { background: var(--bg-hover); color: var(--fg-0); }
 .stage-actions .toggle-group { display: flex; }
 .stage-actions .toggle-group button { border-radius: 0; border-left-width: 0; }
 .stage-actions .toggle-group button:first-child { border-radius: var(--radius) 0 0 var(--radius); border-left-width: 1px; }

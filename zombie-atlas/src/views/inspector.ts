@@ -1,3 +1,4 @@
+import { msg, trLabel } from '../i18n';
 /**
  * Inspector — the right-hand detail panel.
  *
@@ -153,22 +154,22 @@ function classPanel(c: ClassRec): HTMLElement {
       { class: 'insp-title' },
       h('span', { class: 'kinddot', style: { background: 'var(--accent)' } }),
       h('h1', { text: c.name }),
-      h('span', { class: 'badge', text: KIND_NAMES[c.kind] }),
+      h('span', { class: 'badge', text: trLabel(KIND_NAMES[c.kind]) }),
       c.luaExposed ? h('span', { class: 'badge', style: { color: 'var(--lua)', borderColor: 'var(--lua)' }, text: 'Lua API' }) : null,
       c.hiddenFromLua ? h('span', { class: 'badge', text: '@HiddenFromLua' }) : null
     )
   );
-  wrap.append(h('div', { class: 'insp-path', text: `${c.fqn}${c.parentType ? '  (nested)' : ''}` }));
+  wrap.append(h('div', { class: 'insp-path', text: `${c.fqn}${c.parentType ? msg("  (nested)") : ''}` }));
   if (c.doc) wrap.append(h('div', { class: 'insp-doc', text: c.doc }));
 
   wrap.append(
     h(
       'div',
       { class: 'stage-actions', style: { marginBottom: '10px' } },
-      h('button', { 'data-act': 'source', 'data-id': c.id, text: 'View source' }),
-      h('button', { 'data-act': 'focus', 'data-id': c.id, text: 'Show in hierarchy' }),
+      h('button', { 'data-act': 'source', 'data-id': c.id, text: msg("View source") }),
+      h('button', { 'data-act': 'focus', 'data-id': c.id, text: msg("Show in hierarchy") }),
       h('button', {
-        text: 'Copy FQN',
+        text: msg("Copy FQN"),
         onclick: () => navigator.clipboard?.writeText(c.fqn),
       })
     )
@@ -177,45 +178,45 @@ function classPanel(c: ClassRec): HTMLElement {
   // ---- metrics
   wrap.append(
     section(
-      'Metrics',
+      msg("Metrics"),
       h(
         'dl',
         { class: 'kv' },
-        kv('kind', `${KIND_NAMES[c.kind]} · ${c.stereotype}`),
-        kv('source lines', fmtInt(c.loc)),
-        kv('code lines', fmtInt(c.code)),
-        kv('comment lines', fmtInt(c.comment)),
-        kv('file size', fmtBytes(c.bytes)),
-        kv('declared at', `${c.path}:${c.declLine}`),
-        kv('methods', fmtInt(c.methods)),
-        kv('fields', fmtInt(c.fields)),
-        c.enumConstants ? kv('enum constants', String(c.enumConstants)) : null,
-        kv('complexity', fmtInt(c.complexity)),
-        kv('fan-in / fan-out', `${fmtInt(c.fanIn)} / ${fmtInt(c.fanOut)}`),
-        kv('modifiers', c.modifiers || '—')
+        kv(msg("kind"), `${trLabel(KIND_NAMES[c.kind])} · ${trLabel(c.stereotype)}`),
+        kv(msg("source lines"), fmtInt(c.loc)),
+        kv(msg("code lines"), fmtInt(c.code)),
+        kv(msg("comment lines"), fmtInt(c.comment)),
+        kv(msg("file size"), fmtBytes(c.bytes)),
+        kv(msg("declared at"), `${c.path}:${c.declLine}`),
+        kv(msg("methods"), fmtInt(c.methods)),
+        kv(msg("fields"), fmtInt(c.fields)),
+        c.enumConstants ? kv(msg("enum constants"), String(c.enumConstants)) : null,
+        kv(msg("complexity"), fmtInt(c.complexity)),
+        kv(msg("fan-in / fan-out"), `${fmtInt(c.fanIn)} / ${fmtInt(c.fanOut)}`),
+        kv(msg("modifiers"), c.modifiers || '—')
       )
     )
   );
 
   // ---- hierarchy
   const chainEl = h('div', { class: 'link-list' });
-  if (!chain.length) chainEl.append(h('div', { class: 'empty', text: 'No internal superclass (root type)' }));
+  if (!chain.length) chainEl.append(h('div', { class: 'empty', text: msg("No internal superclass (root type)") }));
   for (const a of chain) {
     chainEl.append(linkRow(a, `${KIND_BADGE[a.kind]} ${a.fqn}`));
   }
   chainEl.append(linkRow(c, `→ ${c.fqn}`, true));
 
   const subEl = h('div', { class: 'link-list' });
-  if (!kids.length) subEl.append(h('div', { class: 'empty', text: 'No direct subtypes' }));
+  if (!kids.length) subEl.append(h('div', { class: 'empty', text: msg("No direct subtypes") }));
   for (const k of kids.sort((a, b) => b.code - a.code)) {
-    subEl.append(linkRow(k, `${KIND_BADGE[k.kind]} ${k.name}`, false, k.luaExposed ? 'lua' : `${fmtCompact(k.code)} ln`));
+    subEl.append(linkRow(k, `${KIND_BADGE[k.kind]} ${k.name}`, false, k.luaExposed ? 'lua' : msg("{0} ln", fmtCompact(k.code))));
   }
 
   wrap.append(
     section(
-      `Hierarchy${allDesc.length ? ` · ${allDesc.length} transitive subtypes` : ''}`,
+      msg("Hierarchy{0}", allDesc.length ? msg(" · {0} transitive subtypes", allDesc.length) : ''),
       chainEl,
-      kids.length ? h('h3', { style: { marginTop: '8px' }, text: 'Direct subtypes' }) : null,
+      kids.length ? h('h3', { style: { marginTop: '8px' }, text: msg("Direct subtypes") }) : null,
       kids.length ? subEl : null
     )
   );
@@ -224,7 +225,7 @@ function classPanel(c: ClassRec): HTMLElement {
   const members = memberCache.get(c.id);
   const memSection = h('div', { class: 'insp-section' });
   if (!members) {
-    memSection.append(h('h3', { text: 'Members' }), h('div', { class: 'empty', text: 'loading…' }));
+    memSection.append(h('h3', { text: msg("Members") }), h('div', { class: 'empty', text: msg("loading…") }));
   } else {
     const f = memberFilter.toLowerCase();
     const shown = f
@@ -236,35 +237,36 @@ function classPanel(c: ClassRec): HTMLElement {
       h(
         'h3',
         {},
-        'Members ',
+        msg("Members "),
         h('span', { class: 'count', text: `${shown.length}/${members.length}` }),
         h('input', {
           type: 'text',
-          placeholder: 'filter…',
+          id: "member-filter",
+          placeholder: msg("filter…"),
           value: memberFilter,
           style: { marginLeft: 'auto', width: '120px', padding: '1px 5px', fontSize: '11px' },
           oninput: (e: Event) => {
             memberFilter = (e.target as HTMLInputElement).value;
             render(store.state);
-            const inp = document.querySelector<HTMLInputElement>('#inspector-body input[placeholder="filter…"]');
+            const inp = document.querySelector<HTMLInputElement>('#inspector-body #member-filter');
             inp?.focus();
           },
         })
       )
     );
     if (methods.length) {
-      memSection.append(h('h3', { style: { marginTop: '8px' }, text: `Methods (${methods.length})` }));
+      memSection.append(h('h3', { style: { marginTop: '8px' }, text: msg("Methods ({0})", methods.length) }));
       const list = h('div', { class: 'member-list' });
       for (const m of methods.slice(0, 400)) list.append(memberRow(m));
       memSection.append(list);
     }
     if (fields.length) {
-      memSection.append(h('h3', { style: { marginTop: '8px' }, text: `Fields (${fields.length})` }));
+      memSection.append(h('h3', { style: { marginTop: '8px' }, text: msg("Fields ({0})", fields.length) }));
       const list = h('div', { class: 'member-list' });
       for (const m of fields.slice(0, 300)) list.append(memberRow(m));
       memSection.append(list);
     }
-    if (!shown.length) memSection.append(h('div', { class: 'empty', text: 'No members match the filter' }));
+    if (!shown.length) memSection.append(h('div', { class: 'empty', text: msg("No members match the filter") }));
   }
   wrap.append(memSection);
 
@@ -285,10 +287,10 @@ function classPanel(c: ClassRec): HTMLElement {
     wrap.append(
       section(
         'Coupling',
-        h('h3', { text: `Depends on (${deps.out.get(c.id)?.length ?? 0})` }),
-        out.length ? outEl : h('div', { class: 'empty', text: 'nothing' }),
-        h('h3', { style: { marginTop: '8px' }, text: `Used by (${deps.in.get(c.id)?.length ?? 0})` }),
-        inc.length ? inEl : h('div', { class: 'empty', text: 'nothing' })
+        h('h3', { text: msg("Depends on ({0})", deps.out.get(c.id)?.length ?? 0) }),
+        out.length ? outEl : h('div', { class: 'empty', text: msg("nothing") }),
+        h('h3', { style: { marginTop: '8px' }, text: msg("Used by ({0})", deps.in.get(c.id)?.length ?? 0) }),
+        inc.length ? inEl : h('div', { class: 'empty', text: msg("nothing") })
       )
     );
   }
@@ -309,9 +311,9 @@ function memberRow(m: MemberRec): HTMLElement {
     );
   }
   const badges = h('span', { style: { display: 'flex', gap: '4px' } });
-  if (m.complexity > 12) badges.append(h('span', { class: 'badge cx', text: `cx ${m.complexity}` }));
-  if (lua) badges.append(h('span', { class: 'badge lua', text: 'lua' }));
-  const row = h('div', { class: `member${lua ? ' lua' : ''}`, title: `${m.modifiers} · line ${m.line}${m.doc ? `\n\n${m.doc}` : ''}` }, sig, badges);
+  if (m.complexity > 12) badges.append(h('span', { class: 'badge cx', text: msg("cx {0}", m.complexity) }));
+  if (lua) badges.append(h('span', { class: 'badge lua', text: msg("lua") }));
+  const row = h('div', { class: `member${lua ? ' lua' : ''}`, title: msg("{0} · line {1}{2}", m.modifiers, m.line, m.doc ? `\n\n${m.doc}` : '') }, sig, badges);
   return row;
 }
 
@@ -336,27 +338,27 @@ function pkgPanel(p: PkgNode): HTMLElement {
     h(
       'div',
       { class: 'stage-actions', style: { marginBottom: '10px' } },
-      h('button', { 'data-act': 'zoom-pkg', 'data-pkg': p.path, text: 'Zoom treemap here' }),
-      h('button', { 'data-act': 'clear-filter', text: 'Clear' })
+      h('button', { 'data-act': 'zoom-pkg', 'data-pkg': p.path, text: msg("Zoom treemap here") }),
+      h('button', { 'data-act': 'clear-filter', text: msg("Clear") })
     )
   );
   if (m) {
     wrap.append(
       section(
-        'Package metrics',
+        msg("Package metrics"),
         h(
           'dl',
           { class: 'kv' },
-          kv('types', fmtInt(m.types)),
-          kv('classes / ifaces', `${m.classes} / ${m.interfaces}`),
-          kv('enums / records', `${m.enums} / ${m.records}`),
-          kv('code lines', fmtInt(m.code)),
-          kv('methods', fmtInt(m.methods)),
-          kv('fields', fmtInt(m.fields)),
-          kv('complexity', fmtInt(m.complexity)),
-          kv('lua-exposed', String(m.luaExposed)),
-          kv('cross-pkg fan-in', fmtInt(m.fanIn)),
-          kv('cross-pkg fan-out', fmtInt(m.fanOut))
+          kv(msg("types"), fmtInt(m.types)),
+          kv(msg("classes / ifaces"), `${m.classes} / ${m.interfaces}`),
+          kv(msg("enums / records"), `${m.enums} / ${m.records}`),
+          kv(msg("code lines"), fmtInt(m.code)),
+          kv(msg("methods"), fmtInt(m.methods)),
+          kv(msg("fields"), fmtInt(m.fields)),
+          kv(msg("complexity"), fmtInt(m.complexity)),
+          kv(msg("lua-exposed"), String(m.luaExposed)),
+          kv(msg("cross-pkg fan-in"), fmtInt(m.fanIn)),
+          kv(msg("cross-pkg fan-out"), fmtInt(m.fanOut))
         )
       )
     );
@@ -371,17 +373,17 @@ function pkgPanel(p: PkgNode): HTMLElement {
           { class: 'link', 'data-act': 'pkg', 'data-pkg': k.path },
           h('span', { class: 'kinddot', style: { background: 'var(--accent)' } }),
           h('span', { class: 'nm', text: k.name }),
-          h('span', { class: 'sub', text: `${k.ownIds.length} types · ${fmtCompact(k.metrics?.code ?? 0)} ln` })
+          h('span', { class: 'sub', text: msg("{0} types · {1} ln", k.ownIds.length, fmtCompact(k.metrics?.code ?? 0)) })
         )
       );
     }
-    wrap.append(section(`Sub-packages (${kids.length})`, list));
+    wrap.append(section(msg("Sub-packages ({0})", kids.length), list));
   }
 
   const own = p.ownIds.map((id) => atlas!.byId[id]).sort((a, b) => b.code - a.code);
   const list = h('div', { class: 'link-list' });
-  for (const c of own.slice(0, 60)) list.append(linkRow(c, c.name, false, `${fmtCompact(c.code)} ln`));
-  wrap.append(section(`Types here (${own.length})`, own.length ? list : h('div', { class: 'empty', text: 'none' })));
+  for (const c of own.slice(0, 60)) list.append(linkRow(c, c.name, false, msg("{0} ln", fmtCompact(c.code))));
+  wrap.append(section(msg("Types here ({0})", own.length), own.length ? list : h('div', { class: 'empty', text: msg("none") })));
   return wrap;
 }
 
@@ -391,37 +393,37 @@ function overviewPanel(): HTMLElement {
   const a = atlas!;
   const wrap = h('div');
   const c = a.meta.counts;
-  wrap.append(h('div', { class: 'insp-title' }, h('h1', { text: 'Project overview' })));
+  wrap.append(h('div', { class: 'insp-title' }, h('h1', { text: msg("Project overview") })));
   wrap.append(h('div', { class: 'insp-path', text: `${a.meta.sourceRoot} · ${a.meta.decompiler ?? ''}` }));
   wrap.append(
     section(
-      'Extracted from source',
+      msg("Extracted from source"),
       h(
         'dl',
         { class: 'kv' },
-        kv('files', fmtInt(c.files)),
-        kv('types', fmtInt(c.types)),
-        kv('packages', fmtInt(c.packages)),
-        kv('code lines', fmtInt(c.code)),
-        kv('total lines', fmtInt(c.loc)),
-        kv('methods', fmtInt(c.methods)),
-        kv('fields', fmtInt(c.fields)),
-        kv('lua-exposed types', fmtInt(c.luaExposed)),
-        kv('lua-exposed members', fmtInt(c.luaMembers)),
-        kv('class refs', fmtInt(c.classEdges)),
-        kv('package refs', fmtInt(c.pkgEdges)),
-        kv('source size', fmtBytes(c.bytes))
+        kv(msg("files"), fmtInt(c.files)),
+        kv(msg("types"), fmtInt(c.types)),
+        kv(msg("packages"), fmtInt(c.packages)),
+        kv(msg("code lines"), fmtInt(c.code)),
+        kv(msg("total lines"), fmtInt(c.loc)),
+        kv(msg("methods"), fmtInt(c.methods)),
+        kv(msg("fields"), fmtInt(c.fields)),
+        kv(msg("lua-exposed types"), fmtInt(c.luaExposed)),
+        kv(msg("lua-exposed members"), fmtInt(c.luaMembers)),
+        kv(msg("class refs"), fmtInt(c.classEdges)),
+        kv(msg("package refs"), fmtInt(c.pkgEdges)),
+        kv(msg("source size"), fmtBytes(c.bytes))
       )
     )
   );
   const top = [...a.classes].sort((x, y) => y.code - x.code).slice(0, 10);
   const list = h('div', { class: 'link-list' });
-  for (const t of top) list.append(linkRow(t, t.fqn, false, `${fmtCompact(t.code)} ln`));
-  wrap.append(section('Largest types', list));
+  for (const t of top) list.append(linkRow(t, t.fqn, false, msg("{0} ln", fmtCompact(t.code))));
+  wrap.append(section(msg("Largest types"), list));
   wrap.append(
     section(
-      'Tips',
-      h('div', { class: 'empty', text: 'Click any rectangle to inspect it. Double-click a package to zoom, right-click to zoom out. Press / to search, ? for help.' })
+      msg("Tips"),
+      h('div', { class: 'empty', text: msg("Click any rectangle to inspect it. Double-click a package to zoom, right-click to zoom out. Press / to search, ? for help.") })
     )
   );
   return wrap;

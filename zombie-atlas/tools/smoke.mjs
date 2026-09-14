@@ -8,6 +8,7 @@
  * Usage: node tools/smoke.mjs [--url http://127.0.0.1:5184/]
  */
 
+import { testLocalization } from './test-i18n.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -97,7 +98,7 @@ function check(name, ok, detail = '') {
 }
 
 const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'] });
-const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1, locale: 'en-US' });
 
 const consoleErrors = [];
 page.on('console', (m) => {
@@ -671,6 +672,8 @@ check(
   JSON.stringify(afterReset)
 );
 await page.screenshot({ path: path.join(SHOTS, '19-restore-defaults.png') });
+
+await testLocalization(browser, URL_, check, SHOTS);
 
 // ------------------------------------------------------------- conclusion ---
 check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 4).join(' | '));

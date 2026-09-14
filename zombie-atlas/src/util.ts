@@ -1,9 +1,13 @@
+import { msg, locale } from './i18n';
 /** Small shared helpers: formatting, colour scales, DOM, events. */
 
-export const fmtInt = (n: number): string => n.toLocaleString('en-US');
+const compactFormatter = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
+
+export const fmtInt = (n: number): string => n.toLocaleString(locale);
 
 export function fmtCompact(n: number): string {
   if (!isFinite(n)) return '—';
+  if (locale !== 'en') return compactFormatter.format(n);
   const a = Math.abs(n);
   if (a >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
   if (a >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
@@ -25,11 +29,11 @@ export const pct = (x: number): string => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}
 export function timeAgo(iso: string): string {
   const d = Date.now() - new Date(iso).getTime();
   const min = Math.round(d / 60000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min}m ago`;
+  if (min < 1) return msg("just now");
+  if (min < 60) return msg("{0}m ago", min);
   const h = Math.round(min / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
+  if (h < 24) return msg("{0}h ago", h);
+  return msg("{0}d ago", Math.round(h / 24));
 }
 
 /** Escape text for safe innerHTML interpolation. */

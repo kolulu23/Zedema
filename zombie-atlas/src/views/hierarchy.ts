@@ -1,3 +1,4 @@
+import { msg, trLabel } from '../i18n';
 /**
  * Hierarchy view — the class inheritance forest.
  *
@@ -125,18 +126,19 @@ function hasMatchInSubtree(c: ClassRec, depth = 0): boolean {
 function sidebarList(): HTMLElement {
   const panel = h('div', { class: 'card', style: { alignSelf: 'start' } });
   panel.append(
-    h('h3', { text: `Hierarchy roots (${roots().length})` }),
+    h('h3', { text: msg("Hierarchy roots ({0})", roots().length) }),
     h(
       'div',
       { class: 'field' },
       h('input', {
         type: 'text',
-        placeholder: 'filter roots…',
+        id: "hierarchy-filter",
+        placeholder: msg("filter roots…"),
         value: filterText,
         oninput: (e: Event) => {
           filterText = (e.target as HTMLInputElement).value;
           renderHierarchy(store.state);
-          document.querySelector<HTMLInputElement>('#hierarchy-pane input[placeholder="filter roots…"]')?.focus();
+          document.querySelector<HTMLInputElement>('#hierarchy-pane #hierarchy-filter')?.focus();
         },
       })
     ),
@@ -150,7 +152,7 @@ function sidebarList(): HTMLElement {
           showInterfaces = (e.target as HTMLInputElement).checked;
           renderHierarchy(store.state);
         },
-      }), 'interfaces'),
+      }), msg("interfaces")),
       h('label', { class: 'chk' }, h('input', {
         type: 'checkbox',
         checked: useLuaFilter,
@@ -158,7 +160,7 @@ function sidebarList(): HTMLElement {
           useLuaFilter = (e.target as HTMLInputElement).checked;
           renderHierarchy(store.state);
         },
-      }), 'lua only')
+      }), msg("lua only"))
     )
   );
   const list = h('div', { class: 'link-list' });
@@ -178,7 +180,7 @@ function sidebarList(): HTMLElement {
         },
         h('span', { class: 'kinddot', style: { background: KIND_COLOR[r.kind] } }),
         h('span', { class: 'nm', text: r.name }),
-        h('span', { class: 'sub', text: size > 1 ? `${size} types` : `${fmtCompact(r.code)} ln` })
+        h('span', { class: 'sub', text: size > 1 ? msg("{0} types", size) : msg("{0} ln", fmtCompact(r.code)) })
       )
     );
   }
@@ -189,13 +191,13 @@ function sidebarList(): HTMLElement {
 function treePane(state: AppState): HTMLElement {
   const panel = h('div', { class: 'card', style: { alignSelf: 'start', minWidth: 0 } });
   if (rootId == null || !atlas!.byId[rootId]) {
-    panel.append(h('h3', { text: 'Pick a root' }), h('div', { class: 'empty', text: 'Select a hierarchy root on the left, or search for a class.' }));
+    panel.append(h('h3', { text: msg("Pick a root") }), h('div', { class: 'empty', text: msg("Select a hierarchy root on the left, or search for a class.") }));
     return panel;
   }
   const root = atlas!.byId[rootId];
   panel.append(
-    h('h3', { text: `Inheritance tree · ${root.fqn}` }),
-    h('div', { class: 'sub', text: `${subtreeSize(root.id)} types in this hierarchy · click a name to inspect, caret to expand` })
+    h('h3', { text: msg("Inheritance tree · {0}", root.fqn) }),
+    h('div', { class: 'sub', text: msg("{0} types in this hierarchy · click a name to inspect, caret to expand", subtreeSize(root.id)) })
   );
   const tree = h('div', { class: 'member-list', style: { lineHeight: '1.7' } });
   renderNode(tree, root, 0, state, new Set());
@@ -245,7 +247,7 @@ function renderNode(container: HTMLElement, c: ClassRec, depth: number, state: A
       class: 'm-name',
       style: { color: isSel ? 'var(--accent)' : 'var(--fg-0)', fontWeight: isSel ? 600 : 400 },
       text: c.name,
-      title: `${KIND_NAMES[c.kind]} · ${c.fqn}\n${c.doc ?? ''}`,
+      title: `${trLabel(KIND_NAMES[c.kind])} · ${c.fqn}\n${c.doc ?? ''}`,
       onclick: (e: Event) => {
         e.stopPropagation();
         store.update((s) => {
@@ -253,8 +255,8 @@ function renderNode(container: HTMLElement, c: ClassRec, depth: number, state: A
         });
       },
     }),
-    h('span', { class: 'm-type', style: { color: 'var(--fg-3)', fontSize: '10.5px' }, text: `${fmtCompact(c.code)} ln` }),
-    c.luaExposed ? h('span', { class: 'badge lua', style: { fontSize: '9px' }, text: 'lua' }) : null,
+    h('span', { class: 'm-type', style: { color: 'var(--fg-3)', fontSize: '10.5px' }, text: msg("{0} ln", fmtCompact(c.code)) }),
+    c.luaExposed ? h('span', { class: 'badge lua', style: { fontSize: '9px' }, text: msg("lua") }) : null,
     subs.length ? h('span', { style: { color: 'var(--fg-3)', fontSize: '10.5px' }, text: `+${subs.length}` }) : null
   );
   container.append(row);
@@ -288,7 +290,7 @@ function renderNode(container: HTMLElement, c: ClassRec, depth: number, state: A
             });
           },
         }),
-        h('span', { style: { fontSize: '10px', color: 'var(--fg-3)' }, text: 'implements' })
+        h('span', { style: { fontSize: '10px', color: 'var(--fg-3)' }, text: msg("implements") })
       )
     );
   }
@@ -299,5 +301,5 @@ export function hierarchyStats(): string {
   if (!atlas) return '';
   const roots = atlas.classes.filter((c) => c.superIds.length === 0).length;
   const ifaceImpls = atlas.classes.reduce((a, c) => a + c.ifaceIds.length, 0);
-  return `${roots} roots · ${ifaceImpls} implements edges`;
+  return msg("{0} roots · {1} implements edges", roots, ifaceImpls);
 }

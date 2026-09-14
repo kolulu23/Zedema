@@ -1,3 +1,4 @@
+import { msg, trLabel } from '../i18n';
 /**
  * Subsystems view — the "structured functionality" summary.
  *
@@ -59,7 +60,7 @@ function overviewBar(): HTMLElement {
     bar.append(
       h('div', {
         style: { width: `${share * 100}%`, background: d.color, cursor: 'pointer' },
-        title: `${d.key} — ${pct(share)} of code`,
+        title: msg("{0} — {1} of code", d.key, pct(share)),
         onclick: () => filterToDomain(d.key),
       })
     );
@@ -76,17 +77,17 @@ function overviewBar(): HTMLElement {
   return h(
     'div',
     { class: 'card', style: { gridColumn: '1 / -1' } },
-    h('h3', { text: `Functional domains · ${a.domains.length} top-level packages · ${fmtInt(total)} code lines` }),
+    h('h3', { text: msg("Functional domains · {0} top-level packages · {1} code lines", a.domains.length, fmtInt(total)) }),
     bar,
     legend,
     h(
       'div',
       { class: 'graph-controls', style: { marginTop: '10px' } },
-      h('span', { style: { color: 'var(--fg-3)' }, text: 'sort by' }),
+      h('span', { style: { color: 'var(--fg-3)' }, text: msg("sort by") }),
       ...(['code', 'types', 'complexity', 'fanIn', 'lua', 'name'] as const).map((k) =>
         h('button', {
           class: sortBy === k ? 'on' : '',
-          text: k,
+          text: trLabel(k),
           style: sortBy === k ? 'background:var(--accent);color:var(--bg-0)' : '',
           onclick: () => {
             sortBy = k;
@@ -130,45 +131,45 @@ function cards(): HTMLElement[] {
         class: 'domain-card',
         style: { borderLeftColor: d.color },
         onclick: () => filterToDomain(d.key),
-        title: `Filter the atlas to ${d.key}`,
+        title: msg("Filter the atlas to {0}", d.key),
       },
       h('h3', { text: d.key, style: { color: d.color } }),
-      h('div', { class: 'desc', text: d.label }),
+      h('div', { class: 'desc', text: trLabel(d.label) }),
       h(
         'div',
         { class: 'stats' },
-        stat(fmtCompact(d.metrics.code), 'lines'),
-        stat(fmtInt(d.metrics.types), 'types'),
-        stat(fmtCompact(d.metrics.methods), 'methods'),
-        stat(fmtInt(d.metrics.complexity), 'complexity'),
-        stat(pct(d.metrics.code / totalCode), 'of codebase'),
-        stat(String(d.metrics.luaExposed), 'lua types')
+        stat(fmtCompact(d.metrics.code), msg("lines")),
+        stat(fmtInt(d.metrics.types), msg("types")),
+        stat(fmtCompact(d.metrics.methods), msg("methods")),
+        stat(fmtInt(d.metrics.complexity), msg("complexity")),
+        stat(pct(d.metrics.code / totalCode), msg("of codebase")),
+        stat(String(d.metrics.luaExposed), msg("lua types"))
       ),
       h(
         'div',
         { style: { marginTop: '8px' } },
-        barRow('size', d.metrics.code / maxCode, `${fmtCompact(d.metrics.code)} ln`),
-        barRow('branch density', Math.min(1, density / 0.6), density.toFixed(3)),
+        barRow(msg("size"), d.metrics.code / maxCode, msg("{0} ln", fmtCompact(d.metrics.code))),
+        barRow(msg("branch density"), Math.min(1, density / 0.6), density.toFixed(3)),
         barRow(
-          'cross-pkg coupling',
+          msg("cross-pkg coupling"),
           Math.min(1, d.metrics.fanIn / Math.max(1, Math.max(...a.domains.map((x) => x.metrics.fanIn)))),
-          `${fmtCompact(d.metrics.fanIn)} in / ${fmtCompact(d.metrics.fanOut)} out`
+          msg("{0} in / {1} out", fmtCompact(d.metrics.fanIn), fmtCompact(d.metrics.fanOut))
         ),
         barRow(
-          'type mix',
+          msg("type mix"),
           d.metrics.classes / Math.max(1, d.metrics.types),
-          `${d.metrics.classes}C ${d.metrics.interfaces}I ${d.metrics.enums}E ${d.metrics.records}R`
+          msg("{0}C {1}I {2}E {3}R", d.metrics.classes, d.metrics.interfaces, d.metrics.enums, d.metrics.records)
         )
       ),
       h(
         'div',
         { style: { marginTop: '8px', fontSize: '11px', color: 'var(--fg-3)' } },
-        `${pkgCount} package${pkgCount === 1 ? '' : 's'} · key hubs: `,
+        msg(pkgCount === 1 ? "{0} package · key hubs: " : "{0} packages · key hubs: ", pkgCount),
         ...d.hubs.slice(0, 3).map((hub, i) =>
           h('span', {
             text: `${i ? ', ' : ''}${hub.name}`,
             style: { color: 'var(--accent-2)', cursor: 'pointer' },
-            title: `${hub.fqn} — referenced by ${hub.fanIn} types`,
+            title: msg("{0} — referenced by {1} types", hub.fqn, hub.fanIn),
             onclick: (e: Event) => {
               e.stopPropagation();
               store.update((s) => {

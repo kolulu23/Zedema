@@ -1,3 +1,4 @@
+import { msg, trLabel } from '../i18n';
 /**
  * Treemap view — the Firefox "memory tree map" interaction model applied to a
  * Java code base.
@@ -290,7 +291,7 @@ export class TreemapView {
         const id = `${s.groupBy === 'kind' ? 'k' : 'st'}:${key}`;
         let g = map.get(key);
         if (!g) {
-          g = group(id, key, s.groupBy, []);
+          g = group(id, trLabel(key), s.groupBy, []);
           map.set(key, g);
           root.children!.push(g);
         }
@@ -302,7 +303,7 @@ export class TreemapView {
       for (const c of ids) {
         let g = map.get(c.stereotype);
         if (!g) {
-          g = group(`st:${c.stereotype}`, c.stereotype, 'stereotype', []);
+          g = group(`st:${c.stereotype}`, trLabel(c.stereotype), 'stereotype', []);
           map.set(c.stereotype, g);
           root.children!.push(g);
         }
@@ -539,7 +540,7 @@ export class TreemapView {
               const used = ctx.measureText(label).width;
               ctx.font = `10px var(--font-mono), monospace`;
               ctx.fillStyle = subColor;
-              const extra = `${d.agg.types} types · ${fmtCompact(d.agg.code)} ln`;
+              const extra = msg("{0} types · {1} ln", d.agg.types, fmtCompact(d.agg.code));
               if (w - used > ctx.measureText(extra).width + 18) ctx.fillText(extra, x + 8 + used, y + 3.5);
             }
           }
@@ -578,7 +579,7 @@ export class TreemapView {
             if (c) {
               ctx.font = `10px var(--font-mono), monospace`;
               ctx.fillStyle = subColor;
-              const line = `${fmtCompact(c.code)} ln · ${c.methods}m`;
+              const line = msg("{0} ln · {1}m", fmtCompact(c.code), c.methods);
               if (ctx.measureText(line).width < w - 10) ctx.fillText(line, x + 4, y + 4 + fs + 2);
             }
           }
@@ -851,35 +852,35 @@ export class TreemapView {
     parts.push(`<div class="tt-title">${esc(d.kind === 'member' ? `${d.member?.name}` : d.name)}</div>`);
     const path =
       c != null
-        ? `${c.fqn}${d.kind === 'member' ? ` · line ${d.member?.line}` : ` · line ${c.declLine}`}`
+        ? `${c.fqn}${d.kind === 'member' ? msg(" · line {0}", d.member?.line) : msg(" · line {0}", c.declLine)}`
         : d.pkg ?? d.id.replace(/^[a-z]+:/, '');
     parts.push(`<div class="tt-path">${esc(path)}</div>`);
 
     const rows: [string, string][] = [];
     if (c && d.kind !== 'member') {
-      rows.push(['kind', `${['class', 'interface', 'enum', 'record', 'annotation'][c.kind]} · ${c.stereotype}`]);
-      rows.push(['code', `${fmtInt(c.code)} lines`]);
-      if (c.comment) rows.push(['comments', fmtInt(c.comment)]);
-      rows.push(['members', `${c.methods} methods · ${c.fields} fields`]);
-      rows.push(['complexity', fmtInt(c.complexity)]);
-      rows.push(['fan-in / out', `${c.fanIn} / ${c.fanOut}`]);
-      if (c.luaExposed) rows.push(['lua', `${c.annotations.join(', ') || 'exposed'}`]);
-      if (c.enumConstants) rows.push(['constants', String(c.enumConstants)]);
-      rows.push(['size on map', pct((n.value ?? 0) / (this.root?.value || 1))]);
+      rows.push([msg("kind"), `${trLabel(['class', 'interface', 'enum', 'record', 'annotation'][c.kind])} · ${trLabel(c.stereotype)}`]);
+      rows.push([msg("code"), msg("{0} lines", fmtInt(c.code))]);
+      if (c.comment) rows.push([msg("comments"), fmtInt(c.comment)]);
+      rows.push([msg("members"), msg("{0} methods · {1} fields", c.methods, c.fields)]);
+      rows.push([msg("complexity"), fmtInt(c.complexity)]);
+      rows.push([msg("fan-in / out"), `${c.fanIn} / ${c.fanOut}`]);
+      if (c.luaExposed) rows.push([msg("lua"), `${c.annotations.join(', ') || msg("exposed")}`]);
+      if (c.enumConstants) rows.push([msg("constants"), String(c.enumConstants)]);
+      rows.push([msg("size on map"), pct((n.value ?? 0) / (this.root?.value || 1))]);
     } else if (d.kind === 'member' && d.member) {
       const m = d.member;
-      rows.push(['signature', `${m.type || ''} ${m.name}(${m.params.join(', ')})`.trim()]);
-      rows.push(['line', String(m.line)]);
-      rows.push(['modifiers', m.modifiers || '—']);
-      if (m.kind === 'method') rows.push(['complexity', String(m.complexity)]);
-      if (m.annotations.length) rows.push(['annotations', m.annotations.join(', ')]);
+      rows.push([msg("signature"), `${m.type || ''} ${m.name}(${m.params.join(', ')})`.trim()]);
+      rows.push([msg("line"), String(m.line)]);
+      rows.push([msg("modifiers"), m.modifiers || '—']);
+      if (m.kind === 'method') rows.push([msg("complexity"), String(m.complexity)]);
+      if (m.annotations.length) rows.push([msg("annotations"), m.annotations.join(', ')]);
     } else if (d.agg) {
-      rows.push(['types', fmtInt(d.agg.types)]);
-      rows.push(['code', `${fmtInt(d.agg.code)} lines`]);
-      rows.push(['methods', fmtInt(d.agg.methods)]);
-      rows.push(['complexity', fmtInt(d.agg.complexity)]);
-      rows.push(['lua-exposed', String(d.agg.lua)]);
-      rows.push(['share', pct((n.value ?? 0) / (this.root?.value || 1))]);
+      rows.push([msg("types"), fmtInt(d.agg.types)]);
+      rows.push([msg("code"), msg("{0} lines", fmtInt(d.agg.code))]);
+      rows.push([msg("methods"), fmtInt(d.agg.methods)]);
+      rows.push([msg("complexity"), fmtInt(d.agg.complexity)]);
+      rows.push([msg("lua-exposed"), String(d.agg.lua)]);
+      rows.push([msg("share"), pct((n.value ?? 0) / (this.root?.value || 1))]);
     }
     parts.push(
       `<table>${rows

@@ -1,3 +1,4 @@
+import { msg } from '../i18n';
 /**
  * Source viewer — renders the actual decompiled file for a class.
  *
@@ -29,19 +30,19 @@ export async function openSource(c: ClassRec) {
   const modal = h('div', { class: 'modal' });
   modal.append(
     h('h2', { text: `${c.name}  ·  ${c.path}` }),
-    h('div', { class: 'insp-path', text: `declared at line ${c.declLine} · ${c.loc} lines · ${c.methods} methods · ${c.fields} fields` })
+    h('div', { class: 'insp-path', text: msg("declared at line {0} · {1} lines · {2} methods · {3} fields", c.declLine, c.loc, c.methods, c.fields) })
   );
-  const body = h('div', { class: 'src-wrap' }, h('div', { class: 'empty', style: { padding: '12px' }, text: 'loading source…' }));
+  const body = h('div', { class: 'src-wrap' }, h('div', { class: 'empty', style: { padding: '12px' }, text: msg("loading source…") }));
   modal.append(body);
   modal.append(
     h(
       'div',
       { class: 'close-row' },
       h('button', {
-        text: 'Copy path',
+        text: msg("Copy path"),
         onclick: () => navigator.clipboard?.writeText(c.path),
       }),
-      h('button', { class: 'primary', text: 'Close', onclick: () => backdrop.remove() })
+      h('button', { class: 'primary', text: msg("Close"), onclick: () => backdrop.remove() })
     )
   );
   backdrop.append(modal);
@@ -75,7 +76,7 @@ export async function openSource(c: ClassRec) {
       h('div', {
         class: 'empty',
         style: { padding: '12px' },
-        text: `Could not load source (${(err as Error).message}). Run the atlas through "npm run serve" so /src is mapped to the decompiled tree.`,
+        text: msg("Could not load source ({0}). Run the atlas through \"npm run serve\" so /src is mapped to the decompiled tree.", (err as Error).message),
       })
     );
   }

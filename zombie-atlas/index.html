@@ -16,43 +16,47 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true"></span>
           <span class="brand-text">Zombie<b>Atlas</b></span>
-          <span class="brand-sub" id="brand-sub">loading…</span>
+          <span class="brand-sub" id="brand-sub" data-i18n="loading…">loading…</span>
         </div>
-        <nav class="tabs" id="tabs" role="tablist" aria-label="Views"></nav>
+        <nav class="tabs" id="tabs" role="tablist" aria-label="Views" data-i18n-aria-label="Views"></nav>
         <div class="topbar-right">
+          <select id="language" class="language-select" aria-label="Language" data-i18n-aria-label="Language" title="Language" data-i18n-title="Language">
+            <option value="en" lang="en">English</option>
+            <option value="zh-CN" lang="zh-CN">简体中文</option>
+          </select>
           <div class="search-wrap">
             <input
               id="search"
               class="search"
               type="search"
-              placeholder="Search classes, packages, members…  (/)"
+              placeholder="Search classes, packages, members…  (/)" data-i18n-placeholder="Search classes, packages, members…  (/)"
               autocomplete="off"
               spellcheck="false"
-              aria-label="Search"
+              aria-label="Search" data-i18n-aria-label="Search"
             />
             <div id="search-results" class="search-results" hidden></div>
           </div>
-          <button id="btn-settings" class="icon-btn" title="Customize (S)" aria-label="Customize">⚙</button>
-          <button id="btn-theme" class="icon-btn" title="Toggle theme (T)" aria-label="Toggle theme">◐</button>
-          <button id="btn-help" class="icon-btn" title="Help (?)" aria-label="Help">?</button>
+          <button id="btn-settings" class="icon-btn" title="Customize (S)" data-i18n-title="Customize (S)" aria-label="Customize" data-i18n-aria-label="Customize">⚙</button>
+          <button id="btn-theme" class="icon-btn" title="Toggle theme (T)" data-i18n-title="Toggle theme (T)" aria-label="Toggle theme" data-i18n-aria-label="Toggle theme">◐</button>
+          <button id="btn-help" class="icon-btn" title="Help (?)" data-i18n-title="Help (?)" aria-label="Help" data-i18n-aria-label="Help">?</button>
         </div>
       </header>
 
       <div class="workspace">
         <aside class="sidebar" id="sidebar">
           <section class="panel" id="panel-controls">
-            <h2>View controls</h2>
+            <h2 data-i18n="View controls">View controls</h2>
             <div id="controls"></div>
           </section>
           <section class="panel" id="panel-legend">
-            <h2>Legend</h2>
+            <h2 data-i18n="Legend">Legend</h2>
             <div id="legend"></div>
           </section>
         </aside>
 
         <main class="stage" id="stage">
           <div class="stage-head">
-            <nav class="breadcrumbs" id="breadcrumbs" aria-label="Zoom path"></nav>
+            <nav class="breadcrumbs" id="breadcrumbs" aria-label="Zoom path" data-i18n-aria-label="Zoom path"></nav>
             <div class="stage-actions" id="stage-actions"></div>
           </div>
           <div class="canvas-wrap" id="canvas-wrap">

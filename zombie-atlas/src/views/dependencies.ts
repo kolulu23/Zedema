@@ -1,3 +1,4 @@
+import { msg, trLabel } from '../i18n';
 /**
  * Dependency view — how packages (and the types inside them) reference each
  * other, derived purely from `import` statements and fully-qualified references
@@ -13,7 +14,7 @@ import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, f
 import type { SimulationNodeDatum } from 'd3-force';
 import { type Atlas, loadClassDeps } from '../data';
 import { store, type AppState, type DepMode } from '../state';
-import { fitText, fmtCompact, h, rgba, sampleRamp, esc } from '../util';
+import { fitText, fmtCompact, fmtInt, h, rgba, sampleRamp, esc } from '../util';
 
 interface GNode extends SimulationNodeDatum {
   path: string;
@@ -96,7 +97,7 @@ export function renderDependencies(state: AppState) {
     if (!hint) {
       hint = h('div', {
         class: 'graph-hint',
-        text: 'scroll to zoom · drag to pan · click a node to inspect · drag a node to pin it · double-click a node to focus, empty space to fit',
+        text: msg("scroll to zoom · drag to pan · click a node to inspect · drag a node to pin it · double-click a node to focus, empty space to fit"),
       });
       wrap.append(hint);
     }
@@ -481,9 +482,9 @@ function bind() {
       tip.innerHTML =
         `<div class="tt-title">${esc(n.path)}</div>` +
         `<div class="tt-path">${n.domain}</div>` +
-        `<table><tr><td>code</td><td>${n.code.toLocaleString()} ln</td></tr>` +
-        `<tr><td>packages linked</td><td>${inbound.length} in / ${outbound.length} out</td></tr>` +
-        `<tr><td>total refs</td><td>${n.degree}</td></tr></table>`;
+        `<table><tr><td>${msg("code")}</td><td>${msg("{0} ln", fmtInt(n.code))}</td></tr>` +
+        `<tr><td>${msg("packages linked")}</td><td>${msg("{0} in / {1} out", inbound.length, outbound.length)}</td></tr>` +
+        `<tr><td>${msg("total refs")}</td><td>${n.degree}</td></tr></table>`;
       tip.hidden = false;
       tip.style.left = `${Math.min(wrap.clientWidth - tip.offsetWidth - 4, px + 14)}px`;
       tip.style.top = `${Math.min(wrap.clientHeight - tip.offsetHeight - 4, py + 14)}px`;
@@ -637,7 +638,7 @@ function matrixPane(state: AppState): HTMLElement {
         tip.innerHTML =
           `<div class="tt-title">${esc(list[i])}</div>` +
           `<div class="tt-path">→ ${esc(list[j])}</div>` +
-          `<table><tr><td>class refs</td><td>${v}</td></tr><tr><td>share of row</td><td>${((v / Math.max(1, row.reduce((a, b) => a + b, 0))) * 100).toFixed(1)}%</td></tr></table>`;
+          `<table><tr><td>${msg("class refs")}</td><td>${v}</td></tr><tr><td>${msg("share of row")}</td><td>${((v / Math.max(1, row.reduce((a, b) => a + b, 0))) * 100).toFixed(1)}%</td></tr></table>`;
         tip.hidden = false;
         const wrapRect = wrap.getBoundingClientRect();
         tip.style.left = `${Math.min(wrapRect.width - 480, 220)}px`;
@@ -650,8 +651,8 @@ function matrixPane(state: AppState): HTMLElement {
     });
   });
   panel.append(
-    h('h3', { text: `Package adjacency matrix · top ${list.length} packages` }),
-    h('div', { class: 'sub', text: `row = importing package, column = imported package, cell = number of class-level references (max ${max}). Click a cell for the class edges.` })
+    h('h3', { text: msg("Package adjacency matrix · top {0} packages", list.length) }),
+    h('div', { class: 'sub', text: msg("row = importing package, column = imported package, cell = number of class-level references (max {0}). Click a cell for the class edges.", max) })
   );
   const holder = h('div', { style: { overflow: 'auto', maxHeight: 'calc(100vh - 190px)' } });
   holder.append(svg);
@@ -664,10 +665,10 @@ function classEdgePane(state: AppState): HTMLElement {
   const sel = matrixSel ?? (state.selection.packagePath ? { from: state.selection.packagePath, to: '' } : null);
   const panel = h('div', { class: 'card' });
   if (!sel) {
-    panel.append(h('h3', { text: 'Class-level edges' }), h('div', { class: 'empty', text: 'Pick two packages in the matrix first.' }));
+    panel.append(h('h3', { text: msg("Class-level edges") }), h('div', { class: 'empty', text: msg("Pick two packages in the matrix first.") }));
     return panel;
   }
-  panel.append(h('h3', { text: 'Class-level edges' }));
+  panel.append(h('h3', { text: msg("Class-level edges") }));
   panel.append(classEdgesFor(sel.from, sel.to));
   return panel;
 }
@@ -676,7 +677,7 @@ function classEdgePane(state: AppState): HTMLElement {
 let classDepsCache: { from: number; to: number; w: number }[] | null = null;
 function classEdgesFor(from: string, to: string): HTMLElement {
   const box = h('div');
-  box.append(h('div', { class: 'empty', text: 'loading class edges…' }));
+  box.append(h('div', { class: 'empty', text: msg("loading class edges…") }));
   const draw = (rows: { from: number; to: number; w: number }[]) => {
     const filtered = rows
       .filter((e) => atlas!.byId[e.from]?.pkg === from && (!to || atlas!.byId[e.to]?.pkg === to))
@@ -684,7 +685,7 @@ function classEdgesFor(from: string, to: string): HTMLElement {
       .slice(0, 120);
     box.replaceChildren();
     if (!filtered.length) {
-      box.append(h('div', { class: 'empty', text: 'No class-level edges recorded for this pair.' }));
+      box.append(h('div', { class: 'empty', text: msg("No class-level edges recorded for this pair.") }));
       return;
     }
     const list = h('div', { class: 'link-list' });
@@ -729,21 +730,21 @@ export function dependenciesControls(state: AppState): HTMLElement {
   return h(
     'div',
     { class: 'graph-controls' },
-    h('button', { text: '−', title: 'Zoom out', onclick: () => zoomBy(1 / 1.4) }),
-    h('button', { text: '+', title: 'Zoom in', onclick: () => zoomBy(1.4) }),
-    h('button', { text: 'Fit', title: 'Fit the whole graph', onclick: () => fitView() }),
+    h('button', { text: '−', title: msg("Zoom out"), onclick: () => zoomBy(1 / 1.4) }),
+    h('button', { text: '+', title: msg("Zoom in"), onclick: () => zoomBy(1.4) }),
+    h('button', { text: msg("Fit"), title: msg("Fit the whole graph"), onclick: () => fitView() }),
     h(
       'div',
       { class: 'toggle-group' },
       ...(['graph', 'matrix', 'classes'] as const).map((m) =>
         h('button', {
           class: mode === m ? 'on' : '',
-          text: m,
+          text: trLabel(m),
           onclick: () => setDepMode(m),
         })
       )
     ),
-    h('label', { class: 'chk' }, 'top', h('input', {
+    h('label', { class: 'chk' }, msg("top"), h('input', {
       type: 'number',
       min: '10',
       max: '270',
@@ -754,7 +755,7 @@ export function dependenciesControls(state: AppState): HTMLElement {
         renderDependencies(store.state);
       },
     })),
-    h('label', { class: 'chk' }, 'min refs', h('input', {
+    h('label', { class: 'chk' }, msg("min refs"), h('input', {
       type: 'number',
       min: '1',
       value: String(minWeight),
@@ -775,7 +776,7 @@ export function dependenciesControls(state: AppState): HTMLElement {
           renderDependencies(store.state);
         },
       }),
-      'cross-domain only'
+      msg("cross-domain only")
     )
   );
 }

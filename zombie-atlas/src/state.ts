@@ -1,3 +1,4 @@
+import { msg, locale } from './i18n';
 /**
  * Application state: a tiny observable store with three persistence channels.
  *
@@ -389,8 +390,10 @@ export class Store {
     if (s.filters.stereotypes.length) p.set('st', s.filters.stereotypes.join(','));
     if (selection.zoom.length) p.set('z', selection.zoom.join('|'));
     if (selection.classId != null) p.set('sel', String(selection.classId));
+    if (selection.packagePath) p.set('pkg', selection.packagePath);
+    if (s.filters.minCode) p.set('min', String(s.filters.minCode));
     const hash = p.toString();
-    const url = `${location.pathname}${hash ? '#' + hash : ''}`;
+    const url = `${location.pathname}${location.search}${hash ? '#' + hash : ''}`;
     history.replaceState(null, '', url);
   }
 
@@ -428,6 +431,10 @@ export class Store {
     if (p.get('k')) s.filters.kinds = p.get('k')!.split(',').map(Number).filter((n) => !isNaN(n));
     if (p.get('st')) s.filters.stereotypes = p.get('st')!.split(',').filter(Boolean);
     if (p.get('z')) this.state.selection.zoom = p.get('z')!.split('|').filter(Boolean);
+    const minCode = num('min');
+    if (minCode != null && Number.isFinite(minCode) && minCode >= 0) s.filters.minCode = minCode;
+    const pkg = p.get('pkg');
+    if (pkg && atlas.pkgByPath.has(pkg)) this.state.selection.packagePath = pkg;
     const sel = num('sel');
     if (sel != null && atlas.byId[sel]) this.state.selection.classId = sel;
   }
@@ -518,7 +525,7 @@ export function searchAtlas(atlas: Atlas, q: string, limit = 40): SearchHit[] {
         id: c.id,
         name: c.name,
         sub: c.fqn,
-        meta: `${c.code.toLocaleString()} ln`,
+        meta: msg("{0} ln", c.code.toLocaleString(locale)),
         score: score + Math.min(10, c.fanIn / 100),
       });
     }
@@ -532,7 +539,7 @@ export function searchAtlas(atlas: Atlas, q: string, limit = 40): SearchHit[] {
         type: 'package',
         name: node.name,
         sub: path,
-        meta: `${node.ownIds.length} types`,
+        meta: msg("{0} types", node.ownIds.length),
         score: name === query ? 95 : 35,
       });
     }

@@ -1,3 +1,4 @@
+import { msg, trLabel, initLanguage } from './i18n';
 /**
  * Zombie Atlas — application bootstrap.
  *
@@ -35,11 +36,11 @@ import { initInspector, render as renderInspector, setMemberCache } from './view
 import { $, debounce, fmtCompact, fmtInt, h, hashFor, sampleRamp, timeAgo } from './util';
 
 const VIEWS: { id: ViewId; label: string; hint: string }[] = [
-  { id: 'treemap', label: 'Treemap', hint: 'Nested rectangles: packages → types → members' },
-  { id: 'hierarchy', label: 'Hierarchy', hint: 'Class inheritance forest' },
-  { id: 'dependencies', label: 'Dependencies', hint: 'Package and class reference graph' },
-  { id: 'subsystems', label: 'Subsystems', hint: 'Functional domains of the engine' },
-  { id: 'insights', label: 'Insights', hint: 'Rankings and distributions' },
+  { id: 'treemap', label: msg("Treemap"), hint: msg("Nested rectangles: packages → types → members") },
+  { id: 'hierarchy', label: msg("Hierarchy"), hint: msg("Class inheritance forest") },
+  { id: 'dependencies', label: msg("Dependencies"), hint: msg("Package and class reference graph") },
+  { id: 'subsystems', label: msg("Subsystems"), hint: msg("Functional domains of the engine") },
+  { id: 'insights', label: msg("Insights"), hint: msg("Rankings and distributions") },
 ];
 
 let atlas: Atlas;
@@ -51,12 +52,12 @@ let memberNames = new Map<number, string[]>();
 
 async function boot() {
   const status = $('#statusbar');
-  status.textContent = 'loading dataset…';
+  status.textContent = msg("loading dataset…");
   try {
     atlas = await loadAtlas('data');
   } catch (err) {
     showMessage(
-      `Failed to load the dataset (${(err as Error).message}).\n\nBuild it with "npm run data" and serve the app with "npm run serve".`
+      msg("Failed to load the dataset ({0}).\n\nBuild it with \"npm run data\" and serve the app with \"npm run serve\".", (err as Error).message)
     );
     return;
   }
@@ -66,7 +67,7 @@ async function boot() {
   store.applyUrl(atlas);
 
   document.documentElement.dataset.theme = store.state.settings.theme;
-  $('#brand-sub').textContent = `${atlas.meta.counts.files} files · ${fmtInt(atlas.meta.counts.types)} types · ${timeAgo(atlas.meta.generated)}`;
+  $('#brand-sub').textContent = msg("{0} files · {1} types · {2}", atlas.meta.counts.files, fmtInt(atlas.meta.counts.types), timeAgo(atlas.meta.generated));
 
   treemap = new TreemapView($('#canvas-wrap'), {
     onSelect: (n) => {
@@ -293,26 +294,26 @@ function renderControls(s: AppState) {
 
   wrap.append(
     field(
-      'Size metric',
+      msg("Size metric"),
       select(
         set.sizeMetric,
         [
-          ['code', 'Code lines (non-comment)'],
-          ['loc', 'Total lines'],
-          ['bytes', 'File size'],
-          ['methods', 'Method count'],
-          ['fields', 'Field count'],
-          ['members', 'Members'],
-          ['complexity', 'Cyclomatic complexity'],
-          ['fanIn', 'Fan-in (used by)'],
-          ['fanOut', 'Fan-out (uses)'],
-          ['luaWeight', 'Lua exposure'],
-          ['density', 'Branch density'],
-          ['composite', 'Custom composite…'],
+          ['code', msg("Code lines (non-comment)")],
+          ['loc', msg("Total lines")],
+          ['bytes', msg("File size")],
+          ['methods', msg("Method count")],
+          ['fields', msg("Field count")],
+          ['members', msg("Members")],
+          ['complexity', msg("Cyclomatic complexity")],
+          ['fanIn', msg("Fan-in (used by)")],
+          ['fanOut', msg("Fan-out (uses)")],
+          ['luaWeight', msg("Lua exposure")],
+          ['density', msg("Branch density")],
+          ['composite', msg("Custom composite…")],
         ],
         (v) => upd((x) => (x.sizeMetric = v as MetricKey))
       ),
-      'Area of each rectangle'
+      msg("Area of each rectangle")
     )
   );
 
@@ -324,7 +325,7 @@ function renderControls(s: AppState) {
         h(
           'div',
           { class: 'field' },
-          h('label', { text: `${k} — ${val.toFixed(2)}` }),
+          h('label', { text: `${trLabel(k)} — ${val.toFixed(2)}` }),
           h('input', {
             type: 'range',
             min: '0',
@@ -333,7 +334,7 @@ function renderControls(s: AppState) {
             value: String(val),
             oninput: (e: Event) => {
               const v = Number((e.target as HTMLInputElement).value);
-              (e.target as HTMLInputElement).previousElementSibling!.textContent = `${k} — ${v.toFixed(2)}`;
+              (e.target as HTMLInputElement).previousElementSibling!.textContent = `${trLabel(k)} — ${v.toFixed(2)}`;
               upd((x) => (x.weights[k] = v));
             },
           })
@@ -345,20 +346,20 @@ function renderControls(s: AppState) {
 
   wrap.append(
     field(
-      'Colour by',
+      msg("Colour by"),
       select(
         set.colorMode,
         [
-          ['domain', 'Functional domain'],
-          ['package', 'Package'],
-          ['kind', 'Declaration kind'],
-          ['stereotype', 'Stereotype'],
-          ['fanIn', 'Fan-in (heat)'],
-          ['fanOut', 'Fan-out (heat)'],
-          ['complexity', 'Complexity (heat)'],
-          ['density', 'Branch density (heat)'],
-          ['lua', 'Lua exposure'],
-          ['depth', 'Nesting depth'],
+          ['domain', msg("Functional domain")],
+          ['package', msg("Package")],
+          ['kind', msg("Declaration kind")],
+          ['stereotype', msg("Stereotype")],
+          ['fanIn', msg("Fan-in (heat)")],
+          ['fanOut', msg("Fan-out (heat)")],
+          ['complexity', msg("Complexity (heat)")],
+          ['density', msg("Branch density (heat)")],
+          ['lua', msg("Lua exposure")],
+          ['depth', msg("Nesting depth")],
         ],
         (v) => upd((x) => (x.colorMode = v as Settings['colorMode']))
       )
@@ -367,15 +368,15 @@ function renderControls(s: AppState) {
 
   wrap.append(
     field(
-      'Group by',
+      msg("Group by"),
       select(
         set.groupBy,
         [
-          ['package', 'Package hierarchy'],
-          ['domain', 'Functional domain'],
-          ['stereotype', 'Stereotype'],
-          ['kind', 'Declaration kind'],
-          ['stereotype+package', 'Stereotype → domain'],
+          ['package', msg("Package hierarchy")],
+          ['domain', msg("Functional domain")],
+          ['stereotype', msg("Stereotype")],
+          ['kind', msg("Declaration kind")],
+          ['stereotype+package', msg("Stereotype → domain")],
         ],
         (v) => upd((x) => (x.groupBy = v as Settings['groupBy']))
       )
@@ -387,27 +388,27 @@ function renderControls(s: AppState) {
       'div',
       { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } },
       field(
-        'Layout',
+        msg("Layout"),
         select(
           set.layout,
           [
-            ['squarify', 'Squarified'],
-            ['sliceDice', 'Slice & dice'],
-            ['binary', 'Binary'],
-            ['strip', 'Strips (slice)'],
+            ['squarify', msg("Squarified")],
+            ['sliceDice', msg("Slice & dice")],
+            ['binary', msg("Binary")],
+            ['strip', msg("Strips (slice)")],
           ],
           (v) => upd((x) => (x.layout = v as Settings['layout']))
         )
       ),
       field(
-        'Sort',
+        msg("Sort"),
         select(
           set.sort,
           [
-            ['size', 'Size'],
-            ['name', 'Name'],
-            ['fanIn', 'Fan-in'],
-            ['complexity', 'Complexity'],
+            ['size', msg("Size")],
+            ['name', msg("Name")],
+            ['fanIn', msg("Fan-in")],
+            ['complexity', msg("Complexity")],
           ],
           (v) => upd((x) => (x.sort = v as Settings['sort']))
         )
@@ -420,7 +421,7 @@ function renderControls(s: AppState) {
       'div',
       { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } },
       field(
-        `Depth limit ${set.depthLimit || '∞'}`,
+        msg("Depth limit {0}", set.depthLimit || '∞'),
         h('input', {
           type: 'range',
           min: '0',
@@ -430,7 +431,7 @@ function renderControls(s: AppState) {
         })
       ),
       field(
-        `Padding ${set.padding}px`,
+        msg("Padding {0}px", set.padding),
         h('input', {
           type: 'range',
           min: '0',
@@ -444,7 +445,7 @@ function renderControls(s: AppState) {
 
   wrap.append(
     field(
-      `Hide below ${(set.minShare * 100).toFixed(1)}% of total`,
+      msg("Hide below {0}% of total", (set.minShare * 100).toFixed(1)),
       h('input', {
         type: 'range',
         min: '0',
@@ -453,7 +454,7 @@ function renderControls(s: AppState) {
         value: String(set.minShare),
         oninput: (e: Event) => upd((x) => (x.minShare = Number((e.target as HTMLInputElement).value))),
       }),
-      'Culls tiny rectangles — useful on huge trees'
+      msg("Culls tiny rectangles — useful on huge trees")
     )
   );
 
@@ -461,13 +462,13 @@ function renderControls(s: AppState) {
     h(
       'div',
       {},
-      checkbox('Show members as leaves', set.showMembers, (v) => upd((x) => (x.showMembers = v)), 'Zoom into a package for best results'),
-      checkbox('Only @UsedFromLua types', set.filters.luaOnly, (v) =>
+      checkbox(msg("Show members as leaves"), set.showMembers, (v) => upd((x) => (x.showMembers = v)), msg("Zoom into a package for best results")),
+      checkbox(msg("Only @UsedFromLua types"), set.filters.luaOnly, (v) =>
         upd((x) => {
           x.filters.luaOnly = v;
         })
       ),
-      checkbox('Labels', set.labelMode !== 'never', (v) => upd((x) => (x.labelMode = v ? 'auto' : 'never')))
+      checkbox(msg("Labels"), set.labelMode !== 'never', (v) => upd((x) => (x.labelMode = v ? 'auto' : 'never')))
     )
   );
 
@@ -482,7 +483,7 @@ function renderControls(s: AppState) {
     kindChips.append(
       h('span', {
         class: `chip${on ? ' on' : ''}`,
-        text: k,
+        text: trLabel(k),
         onclick: () =>
           upd((x) => {
             x.filters.kinds = on ? x.filters.kinds.filter((v) => v !== i) : [...x.filters.kinds, i];
@@ -497,7 +498,7 @@ function renderControls(s: AppState) {
     stereoChips.append(
       h('span', {
         class: `chip${on ? ' on' : ''}`,
-        text: `${st} ${n}`,
+        text: `${trLabel(st)} ${n}`,
         onclick: () =>
           upd((x) => {
             x.filters.stereotypes = on ? x.filters.stereotypes.filter((v) => v !== st) : [...x.filters.stereotypes, st];
@@ -514,7 +515,7 @@ function renderControls(s: AppState) {
         class: `chip${on ? ' on' : ''}`,
         style: { borderColor: on ? d.color : '', color: on ? d.color : '' },
         text: d.key,
-        title: `${d.metrics.types} types · ${fmtCompact(d.metrics.code)} lines`,
+        title: msg("{0} types · {1} lines", d.metrics.types, fmtCompact(d.metrics.code)),
         onclick: () =>
           upd((x) => {
             x.filters.domains = on ? x.filters.domains.filter((v) => v !== d.key) : [...x.filters.domains, d.key];
@@ -524,11 +525,11 @@ function renderControls(s: AppState) {
   }
 
   wrap.append(
-    field('Kind', kindChips),
-    field('Stereotype', stereoChips),
-    field(`Domain (${atlas.domains.length})`, domainChips),
+    field(msg("Kind"), kindChips),
+    field(msg("Stereotype"), stereoChips),
+    field(msg("Domain ({0})", atlas.domains.length), domainChips),
     field(
-      'Minimum code lines',
+      msg("Minimum code lines"),
       h('input', {
         type: 'number',
         min: '0',
@@ -545,7 +546,7 @@ function renderControls(s: AppState) {
   if (activeFilters) {
     wrap.append(
       h('button', {
-        text: `Clear ${activeFilters} filter${activeFilters > 1 ? 's' : ''}`,
+        text: msg(activeFilters === 1 ? "Clear {0} filter" : "Clear {0} filters", activeFilters),
         style: { width: '100%', padding: '4px', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer' },
         onclick: () =>
           store.update((x) => {
@@ -560,8 +561,8 @@ function renderControls(s: AppState) {
   // ---- persistence footer
   const report = store.storage;
   const resetBtn = h('button', {
-    text: 'Restore defaults',
-    title: 'Discard every saved setting and write the defaults back to localStorage',
+    text: msg("Restore defaults"),
+    title: msg("Discard every saved setting and write the defaults back to localStorage"),
     style: {
       width: '100%', padding: '4px', background: 'var(--bg-2)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--fg-1)',
@@ -569,15 +570,15 @@ function renderControls(s: AppState) {
     onclick: (e: Event) => {
       store.resetSettings();
       const btn = e.target as HTMLButtonElement;
-      btn.textContent = '✓ defaults restored';
-      setTimeout(() => (btn.textContent = 'Restore defaults'), 1400);
+      btn.textContent = msg("✓ defaults restored");
+      setTimeout(() => (btn.textContent = msg("Restore defaults")), 1400);
     },
   });
 
   const storageNote =
-    report.status === 'missing' ? 'No saved settings found — defaults written.'
-    : report.status === 'repaired' ? `Saved settings repaired on load (${report.repairs.length} field${report.repairs.length === 1 ? '' : 's'}).`
-    : report.status === 'unavailable' ? 'localStorage is unavailable — settings will not persist.'
+    report.status === 'missing' ? msg("No saved settings found — defaults written.")
+    : report.status === 'repaired' ? msg(report.repairs.length === 1 ? "Saved settings repaired on load ({0} field)." : "Saved settings repaired on load ({0} fields).", report.repairs.length)
+    : report.status === 'unavailable' ? msg("localStorage is unavailable — settings will not persist.")
     : null;
 
   wrap.append(
@@ -588,7 +589,7 @@ function renderControls(s: AppState) {
       h('div', {
         class: 'hint',
         title: report.repairs.join('\n'),
-        text: storageNote ?? `Saved in localStorage as ${'zombie-atlas.settings.v1'}.`,
+        text: storageNote ?? msg("Saved in localStorage as {0}.", 'zombie-atlas.settings.v1'),
       })
     )
   );
@@ -619,9 +620,9 @@ function renderLegend(s: AppState) {
     for (let i = 0; i <= 10; i++) stops.push(sampleRamp(s.settings.palette, i / 10));
     grad.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
     wrap.append(
-      h('div', { style: { fontSize: '11px', color: 'var(--fg-2)', marginBottom: '4px' }, text: `low → high ${mode}` }),
+      h('div', { style: { fontSize: '11px', color: 'var(--fg-2)', marginBottom: '4px' }, text: msg("low → high {0}", trLabel(mode)) }),
       h('div', { class: 'legend-scale' }, h('span', { text: '0' }), grad, h('span', { text: fmtInt(atlas.max[mode] ?? 0) })),
-      h('div', { class: 'hint', style: { marginTop: '8px' }, text: 'Scale is √-compressed so mid-range values stay readable.' })
+      h('div', { class: 'hint', style: { marginTop: '8px' }, text: msg("Scale is √-compressed so mid-range values stay readable.") })
     );
   } else if (mode === 'kind') {
     KIND_NAMES.forEach((k, i) => {
@@ -632,7 +633,7 @@ function renderLegend(s: AppState) {
           'div',
           { class: 'legend-item' },
           h('span', { class: 'sw', style: { background: KIND_COLORS.dark[i] } }),
-          k,
+          trLabel(k),
           h('span', { class: 'cnt', text: fmtInt(n) })
         )
       );
@@ -648,7 +649,7 @@ function renderLegend(s: AppState) {
             'div',
             { class: 'legend-item' },
             h('span', { class: 'sw', style: { background: sampleRamp(s.settings.palette, (hashFor(st) % 100) / 100) } }),
-            st,
+            trLabel(st),
             h('span', { class: 'cnt', text: fmtInt(n) })
           )
         );
@@ -656,7 +657,7 @@ function renderLegend(s: AppState) {
   } else if (mode === 'lua') {
     wrap.append(
       h('div', { class: 'legend-item' }, h('span', { class: 'sw', style: { background: '#c586c0' } }), '@UsedFromLua', h('span', { class: 'cnt', text: fmtInt(atlas.meta.counts.luaExposed) })),
-      h('div', { class: 'legend-item' }, h('span', { class: 'sw', style: { background: '#39414f' } }), 'not exposed', h('span', { class: 'cnt', text: fmtInt(atlas.classes.length - atlas.meta.counts.luaExposed) }))
+      h('div', { class: 'legend-item' }, h('span', { class: 'sw', style: { background: '#39414f' } }), msg("not exposed"), h('span', { class: 'cnt', text: fmtInt(atlas.classes.length - atlas.meta.counts.luaExposed) }))
     );
   } else {
     const list = mode === 'package' ? atlas.domains.slice().sort((a, b) => b.metrics.code - a.metrics.code) : atlas.domains;
@@ -667,7 +668,7 @@ function renderLegend(s: AppState) {
           'div',
           {
             class: `legend-item${on ? '' : ''}`,
-            title: d.label,
+            title: trLabel(d.label),
             onclick: () =>
               store.update((x) => {
                 x.settings.filters.domains = on
@@ -681,7 +682,7 @@ function renderLegend(s: AppState) {
         )
       );
     }
-    wrap.append(h('div', { class: 'hint', style: { marginTop: '8px' }, text: 'Click a domain to filter the map.' }));
+    wrap.append(h('div', { class: 'hint', style: { marginTop: '8px' }, text: msg("Click a domain to filter the map.") }));
   }
   host.replaceChildren(wrap);
 }
@@ -704,7 +705,8 @@ function renderBreadcrumbs(s: AppState) {
   );
   zoom.forEach((id, i) => {
     crumbs.push(h('span', { class: 'sep', text: '›' }));
-    const label = id.replace(/^[a-z]+:/, '');
+    const rawLabel = id.replace(/^[a-z]+:/, '');
+    const label = /^(k|st):/.test(id) ? trLabel(rawLabel) : rawLabel;
     crumbs.push(
       mk(label, i === zoom.length - 1, () =>
         store.update((x) => {
@@ -729,12 +731,12 @@ function renderBreadcrumbs(s: AppState) {
 function activeFilterSummary(s: AppState): string {
   const f = s.settings.filters;
   const bits: string[] = [];
-  if (f.query) bits.push(`query "${f.query}"`);
-  if (f.domains.length) bits.push(`domains: ${f.domains.join(', ')}`);
-  if (f.kinds.length) bits.push(`kinds: ${f.kinds.map((k) => KIND_NAMES[k]).join(', ')}`);
-  if (f.stereotypes.length) bits.push(`stereotypes: ${f.stereotypes.join(', ')}`);
-  if (f.luaOnly) bits.push('only @UsedFromLua types');
-  if (f.minCode) bits.push(`at least ${f.minCode} code lines`);
+  if (f.query) bits.push(msg("query \"{0}\"", f.query));
+  if (f.domains.length) bits.push(msg("domains: {0}", f.domains.join(', ')));
+  if (f.kinds.length) bits.push(msg("kinds: {0}", f.kinds.map((k) => trLabel(KIND_NAMES[k])).join(', ')));
+  if (f.stereotypes.length) bits.push(msg("stereotypes: {0}", f.stereotypes.map(trLabel).join(', ')));
+  if (f.luaOnly) bits.push(msg("only @UsedFromLua types"));
+  if (f.minCode) bits.push(msg("at least {0} code lines", f.minCode));
   return bits.join('  ·  ');
 }
 
@@ -752,11 +754,11 @@ function renderEmptyState(s: AppState) {
   const card = h(
     'div',
     { class: 'empty-state-card' },
-    h('h3', { text: why ? 'No types match the current filters' : 'Nothing to draw at this zoom level' }),
+    h('h3', { text: why ? msg("No types match the current filters") : msg("Nothing to draw at this zoom level") }),
     h('p', {
       text: why
-        ? 'The treemap is empty because every type was filtered out.'
-        : 'Every rectangle here was culled by the "hide below % of total" setting.',
+        ? msg("The treemap is empty because every type was filtered out.")
+        : msg("Every rectangle here was culled by the \"hide below % of total\" setting."),
     }),
     why ? h('div', { class: 'why', text: why }) : null,
     h(
@@ -765,7 +767,7 @@ function renderEmptyState(s: AppState) {
       why
         ? h('button', {
             class: 'primary',
-            text: 'Clear filters',
+            text: msg("Clear filters"),
             onclick: () =>
               store.update((x) => {
                 x.settings.filters = { query: '', kinds: [], stereotypes: [], domains: [], luaOnly: false, minCode: 0 };
@@ -774,7 +776,7 @@ function renderEmptyState(s: AppState) {
           })
         : null,
       h('button', {
-        text: 'Reset view',
+        text: msg("Reset view"),
         onclick: () =>
           store.update((x) => {
             x.settings.filters = { query: '', kinds: [], stereotypes: [], domains: [], luaOnly: false, minCode: 0 };
@@ -796,9 +798,9 @@ function renderStageActions(s: AppState) {
   if (s.view === 'treemap') {
     actions.push(
       h('div', { class: 'toggle-group' }, ...[
-        ['squarify', 'Squarified'],
-        ['sliceDice', 'Slice'],
-        ['binary', 'Binary'],
+        ['squarify', msg("Squarified")],
+        ['sliceDice', msg("Slice")],
+        ['binary', msg("Binary")],
       ].map(([k, label]) =>
         h('button', {
           class: s.settings.layout === k ? 'on' : '',
@@ -812,7 +814,7 @@ function renderStageActions(s: AppState) {
     );
     actions.push(
       h('button', {
-        text: s.settings.showMembers ? 'Leaves: members' : 'Leaves: types',
+        text: s.settings.showMembers ? msg("Leaves: members") : msg("Leaves: types"),
         onclick: () =>
           store.update((x) => {
             x.settings.showMembers = !x.settings.showMembers;
@@ -822,14 +824,14 @@ function renderStageActions(s: AppState) {
     if (s.selection.zoom.length) {
       actions.push(
         h('button', {
-          text: '↑ Up',
+          text: msg("↑ Up"),
           onclick: () =>
             store.update((x) => {
               x.selection.zoom = x.selection.zoom.slice(0, -1);
             }),
         }),
         h('button', {
-          text: '⌂ Root',
+          text: msg("⌂ Root"),
           onclick: () =>
             store.update((x) => {
               x.selection.zoom = [];
@@ -840,12 +842,12 @@ function renderStageActions(s: AppState) {
     actions.push(
       h('button', {
         text: 'PNG',
-        title: 'Download the current view as PNG',
+        title: msg("Download the current view as PNG"),
         onclick: exportPng,
       }),
       h('button', {
         text: 'JSON',
-        title: 'Download the visible tree as JSON',
+        title: msg("Download the visible tree as JSON"),
         onclick: exportJson,
       })
     );
@@ -854,17 +856,17 @@ function renderStageActions(s: AppState) {
   if (s.view === 'dependencies') actions.push(dependenciesControls(s));
   if (s.view === 'hierarchy') {
     actions.push(
-      h('button', { text: 'Collapse all', onclick: () => collapseHierarchy() }),
-      h('button', { text: 'Expand two levels', onclick: () => expandHierarchy() })
+      h('button', { text: msg("Collapse all"), onclick: () => collapseHierarchy() }),
+      h('button', { text: msg("Expand two levels"), onclick: () => expandHierarchy() })
     );
   }
 
-  const perma = h('button', { text: '🔗 Permalink', title: 'Copy a shareable link to this exact view' });
+  const perma = h('button', { text: msg("🔗 Permalink"), title: msg("Copy a shareable link to this exact view") });
   perma.addEventListener('click', () => {
     store.syncUrl();
     navigator.clipboard?.writeText(location.href);
-    perma.textContent = '✓ copied';
-    setTimeout(() => (perma.textContent = '🔗 Permalink'), 1200);
+    perma.textContent = msg("✓ copied");
+    setTimeout(() => (perma.textContent = msg("🔗 Permalink")), 1200);
   });
   actions.push(perma);
   host.replaceChildren(...actions);
@@ -950,7 +952,7 @@ function bindSearch() {
   /** Rebuild the result rows (only when the query changed). */
   const paint = () => {
     if (!items.length) {
-      results.replaceChildren(h('div', { class: 'sr-empty', text: 'No matches' }));
+      results.replaceChildren(h('div', { class: 'sr-empty', text: msg("No matches") }));
       results.hidden = false;
       return;
     }
@@ -965,7 +967,7 @@ function bindSearch() {
             // detach the hovered node and retrigger mouseenter forever
             onmouseenter: () => setActive(i),
           },
-          h('span', { class: 'sr-kind', text: it.type }),
+          h('span', { class: 'sr-kind', text: trLabel(it.type) }),
           h('span', { class: 'sr-name', text: it.name }),
           h('span', { class: 'sr-pkg', text: it.sub }),
           h('span', { class: 'sr-meta', text: it.meta })
@@ -1124,61 +1126,61 @@ function openHelp() {
   modal.append(
     h('h2', { text: 'Zombie Atlas' }),
     h('p', {
-      text: `An interactive map of the decompiled Project Zomboid source tree (${atlas.meta.counts.files} files, ${fmtInt(atlas.meta.counts.types)} types, ${fmtInt(atlas.meta.counts.code)} code lines). Every number is parsed straight from ${atlas.meta.sourceRoot}/ — no manual curation.`,
+      text: msg("An interactive map of the decompiled Project Zomboid source tree ({0} files, {1} types, {2} code lines). Every number is parsed straight from {3}/ — no manual curation.", atlas.meta.counts.files, fmtInt(atlas.meta.counts.types), fmtInt(atlas.meta.counts.code), atlas.meta.sourceRoot),
     }),
-    h('h3', { text: 'Views' }),
+    h('h3', { text: msg("Views") }),
     h(
       'table',
       {},
       h('tbody', {}, ...VIEWS.map((v) => h('tr', {}, h('td', { style: { width: '130px' }, text: v.label }), h('td', { text: v.hint }))))
     ),
-    h('h3', { text: 'Mouse & keyboard' }),
+    h('h3', { text: msg("Mouse & keyboard") }),
     h(
       'table',
       {},
       h(
         'tbody',
         {},
-        row('click', 'select a type or package'),
-        row('double-click', 'zoom into a package / focus a type'),
-        row('right-click', 'zoom out to the root'),
-        row('hover', 'full readout for the rectangle under the cursor'),
-        row('/ ', 'focus search'),
-        row('Esc', 'zoom out one level / clear selection'),
-        row('1…5', 'switch view'),
-        row('T', 'toggle light / dark theme'),
-        row('S', 'toggle the sidebar'),
-        row('I', 'toggle the inspector'),
-        row('M', 'toggle member-level leaves')
+        row(msg("click"), msg("select a type or package")),
+        row(msg("double-click"), msg("zoom into a package / focus a type")),
+        row(msg("right-click"), msg("zoom out to the root")),
+        row(msg("hover"), msg("full readout for the rectangle under the cursor")),
+        row('/ ', msg("focus search")),
+        row('Esc', msg("zoom out one level / clear selection")),
+        row('1…5', msg("switch view")),
+        row('T', msg("toggle light / dark theme")),
+        row('S', msg("toggle the sidebar")),
+        row('I', msg("toggle the inspector")),
+        row('M', msg("toggle member-level leaves"))
       )
     ),
-    h('h3', { text: 'Customisation' }),
+    h('h3', { text: msg("Customisation") }),
     h('p', {
-      text: 'Set the rectangle size to any single metric or blend your own composite with the weight sliders; recolour by domain, package, kind, stereotype, heat maps or Lua exposure; regroup the whole tree by package, domain, stereotype or kind; change the tiling algorithm, padding, depth limit and small-node culling. Settings persist in localStorage and the current view is encoded in the URL — use the Permalink button to share an exact configuration.',
+      text: msg("Set the rectangle size to any single metric or blend your own composite with the weight sliders; recolour by domain, package, kind, stereotype, heat maps or Lua exposure; regroup the whole tree by package, domain, stereotype or kind; change the tiling algorithm, padding, depth limit and small-node culling. Settings persist in localStorage and the current view is encoded in the URL — use the Permalink button to share an exact configuration."),
     }),
-    h('h3', { text: 'Where your settings live' }),
+    h('h3', { text: msg("Where your settings live") }),
     h('p', {
       html:
-        'Configuration is stored in <code>localStorage</code> under the single key ' +
-        '<code>zombie-atlas.settings.v1</code> (size metric, colours, grouping, layout, filters, panel visibility). ' +
-        'The view, zoom path, selection and filter summary also travel in the URL hash, so a permalink reproduces what you see. ' +
-        'On load every field is validated and anything missing or malformed falls back to its default, then the repaired payload is written back — ' +
-        'so clearing storage, hand-editing it or upgrading the app can never wedge the UI.',
+        msg("Configuration is stored in <code>localStorage</code> under the single key ") +
+        msg("<code>zombie-atlas.settings.v1</code> (size metric, colours, grouping, layout, filters, panel visibility). ") +
+        msg("The view, zoom path, selection and filter summary also travel in the URL hash, so a permalink reproduces what you see. ") +
+        msg("On load every field is validated and anything missing or malformed falls back to its default, then the repaired payload is written back — ") +
+        msg("so clearing storage, hand-editing it or upgrading the app can never wedge the UI."),
     }),
     h('p', {
       html:
-        'To start over, press <b>Restore defaults</b> at the bottom of the View controls, or run ' +
-        '<code>zombieAtlas.store.resetSettings()</code> in the console. Remove the URL hash as well if a bookmark is re-applying filters.',
+        msg("To start over, press <b>Restore defaults</b> at the bottom of the View controls, or run ") +
+        msg("<code>zombieAtlas.store.resetSettings()</code> in the console. Remove the URL hash as well if a bookmark is re-applying filters."),
     }),
-    h('h3', { text: 'Data pipeline' }),
+    h('h3', { text: msg("Data pipeline") }),
     h('p', {
       html:
-        '<code>tools/extract.mjs</code> lexes every <code>.java</code> file (comments, strings and text blocks masked), extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>public/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner.',
+        msg("<code>tools/extract.mjs</code> lexes every <code>.java</code> file (comments, strings and text blocks masked), extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>public/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner."),
     }),
     h(
       'div',
       { class: 'close-row' },
-      h('button', { class: 'primary', text: 'Close', onclick: () => root.replaceChildren() })
+      h('button', { class: 'primary', text: msg("Close"), onclick: () => root.replaceChildren() })
     )
   );
   backdrop.append(modal);
@@ -1200,18 +1202,24 @@ function renderStatus(s: AppState) {
   const shown = ids.size;
   const bits: (HTMLElement | string)[] = [];
   bits.push(
-    h('span', {}, h('b', { text: fmtInt(shown) }), ` / ${fmtInt(atlas.classes.length)} types shown`)
+    h('span', {}, h('b', { text: fmtInt(shown) }), msg(" / {0} types shown", fmtInt(atlas.classes.length)))
   );
-  bits.push(h('span', { text: `${fmtInt(atlas.meta.counts.packages)} packages` }));
-  bits.push(h('span', { text: `${fmtInt(atlas.meta.counts.code)} code lines` }));
-  if (s.view === 'dependencies') bits.push(h('span', { text: `${fmtInt(atlas.meta.counts.pkgEdges)} package edges · ${fmtInt(atlas.meta.counts.classEdges)} class refs` }));
+  bits.push(h('span', { text: msg("{0} packages", fmtInt(atlas.meta.counts.packages)) }));
+  bits.push(h('span', { text: msg("{0} code lines", fmtInt(atlas.meta.counts.code)) }));
+  if (s.view === 'dependencies') bits.push(h('span', { text: msg("{0} package edges · {1} class refs", fmtInt(atlas.meta.counts.pkgEdges), fmtInt(atlas.meta.counts.classEdges)) }));
   if (s.view === 'hierarchy') bits.push(h('span', { text: hierarchyStats() }));
   if (currentHover) {
     bits.push(h('span', { style: { color: 'var(--fg-1)' }, text: `▸ ${currentHover.name}` }));
   }
   bits.push(h('span', { class: 'grow' }));
-  bits.push(h('span', { text: `${s.settings.sizeMetric} · ${s.settings.colorMode} · ${s.settings.groupBy}` }));
+  bits.push(h('span', { text: `${trLabel(s.settings.sizeMetric)} · ${trLabel(s.settings.colorMode)} · ${trLabel(s.settings.groupBy)}` }));
   bar.replaceChildren(...bits);
 }
 
+initLanguage(() => {
+  if (store.state.ready) {
+    store.saveSettings();
+    store.syncUrl();
+  }
+});
 boot();

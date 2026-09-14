@@ -6,20 +6,20 @@
 
 The headless smoke test writes its captures to `.pw-shots/` (gitignored). A fresh run produces:
 
-| File | Shows |
-| --- | --- |
-| `.pw-shots/01-treemap.png` | Root treemap — every package and type in the tree |
-| `.pw-shots/02-treemap-zoomed.png` | The same map after a double-click zoom, with breadcrumbs |
-| `.pw-shots/03-selection.png` | `IsoPlayer` selected: highlighted rectangle plus populated inspector |
-| `.pw-shots/04-source.png` | Source-viewer modal showing the decompiled file for the selected type |
-| `.pw-shots/05-hierarchy.png` | Inheritance forest with the root list |
-| `.pw-shots/06-dependencies.png` | Force-directed package graph |
-| `.pw-shots/07-matrix.png` | Package adjacency matrix with the class-edge list below it |
-| `.pw-shots/08-subsystems.png` | Domain bar and the per-domain cards |
-| `.pw-shots/09-insights.png` | Rankings and histograms |
-| `.pw-shots/10-treemap-light.png` | Treemap in the light theme |
-| `.pw-shots/11-groupby-stereotype.png` | Treemap regrouped by inferred stereotype |
-| `.pw-shots/12-members.png` | Member-level leaves inside types |
+| File                                  | Shows                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `.pw-shots/01-treemap.png`            | Root treemap — every package and type in the tree                     |
+| `.pw-shots/02-treemap-zoomed.png`     | The same map after a double-click zoom, with breadcrumbs              |
+| `.pw-shots/03-selection.png`          | `IsoPlayer` selected: highlighted rectangle plus populated inspector  |
+| `.pw-shots/04-source.png`             | Source-viewer modal showing the decompiled file for the selected type |
+| `.pw-shots/05-hierarchy.png`          | Inheritance forest with the root list                                 |
+| `.pw-shots/06-dependencies.png`       | Force-directed package graph                                          |
+| `.pw-shots/07-matrix.png`             | Package adjacency matrix with the class-edge list below it            |
+| `.pw-shots/08-subsystems.png`         | Domain bar and the per-domain cards                                   |
+| `.pw-shots/09-insights.png`           | Rankings and histograms                                               |
+| `.pw-shots/10-treemap-light.png`      | Treemap in the light theme                                            |
+| `.pw-shots/11-groupby-stereotype.png` | Treemap regrouped by inferred stereotype                              |
+| `.pw-shots/12-members.png`            | Member-level leaves inside types                                      |
 
 The directory may also contain extra captures from earlier sessions (`A-root.png`, `B-iso.png`, `C-core.png`, `C-stereotype.png`). Regenerate the set with the smoke test:
 
@@ -45,28 +45,28 @@ Vite drives the pipeline itself through the `zombie-atlas-data` plugin in
 own; `tools/build.mjs` only exists to translate the flags below into the
 environment variables that plugin reads.
 
-| Command | What it does |
-| --- | --- |
-| `npm install` | Install dependencies. |
-| `npm run data` | Regenerate the JSON bundle into `dist/data/` (`node tools/extract.mjs`). |
-| `npm run validate` | Independently cross-check the generated bundle against the raw source. |
-| `npm run build` | `vite build` — bundles the app, then writes `dist/data/` from the plugin's `closeBundle` hook. |
-| `npm run dev` | `vite` — dev server on port 5183; generates the bundle on startup and regenerates it when the tree changes. |
-| `npm run serve` | Serve the existing `dist/` plus the raw sources at http://127.0.0.1:5184/. |
-| `npm start` | `npm run build` followed by `node tools/serve.mjs`. |
-| `npm run typecheck` | `tsc --noEmit`. |
-| `npm test` | `npm run validate` followed by the smoke test. |
+| Command                            | What it does                                                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `npm install`                      | Install dependencies.                                                                                                          |
+| `npm run data`                     | Regenerate the JSON bundle into `dist/data/` (`node tools/extract.mjs`).                                                       |
+| `npm run validate`                 | Independently cross-check the generated bundle against the raw source.                                                         |
+| `npm run build`                    | `vite build` — bundles the app, then writes `dist/data/` from the plugin's `closeBundle` hook.                                 |
+| `npm run dev`                      | `vite` — dev server on port 5183; generates the bundle on startup and regenerates it when the tree changes.                    |
+| `npm run serve`                    | Serve the existing `dist/` plus the raw sources at http://127.0.0.1:5184/.                                                     |
+| `npm start`                        | `npm run build` followed by `node tools/serve.mjs`.                                                                            |
+| `npm run typecheck`                | `tsc --noEmit`.                                                                                                                |
+| `npm test`                         | `npm run validate` followed by the smoke test.                                                                                 |
 | `node tools/smoke.mjs [--url ...]` | Headless-browser test of all 66 checks; serves `dist/` itself unless `--url` is given, and writes screenshots to `.pw-shots/`. |
-| `sh tools/pw.sh <command>` | Run any command with the project-local Chromium and shared libraries on the path (the smoke test does this for itself). |
+| `sh tools/pw.sh <command>`         | Run any command with the project-local Chromium and shared libraries on the path (the smoke test does this for itself).        |
 
 Extra flags accepted by `tools/build.mjs`:
 
-| Flag | Effect |
-| --- | --- |
-| `--dev` | Extract, then run the Vite dev server instead of a production build. |
-| `--skip-data` | Reuse the existing `dist/data/` bundle (UI-only rebuild, ~0.2 s). |
-| `--src <dir>` | Decompile tree to read (overrides `ZOMBIE_SRC`). |
-| `--pretty` | Indent the emitted JSON (larger, easier to diff by hand). |
+| Flag          | Effect                                                               |
+| ------------- | -------------------------------------------------------------------- |
+| `--dev`       | Extract, then run the Vite dev server instead of a production build. |
+| `--skip-data` | Reuse the existing `dist/data/` bundle (UI-only rebuild, ~0.2 s).    |
+| `--src <dir>` | Decompile tree to read (overrides `ZOMBIE_SRC`).                     |
+| `--pretty`    | Indent the emitted JSON (larger, easier to diff by hand).            |
 
 ### Pointing at your source tree
 
@@ -123,17 +123,42 @@ The whole dataset is produced by one extractor, `tools/extract.mjs` (`npm run da
 
 Metrics recorded per type (their meaning is echoed in `meta.json` so the bundle is self-describing):
 
-| Metric | Meaning |
-| --- | --- |
-| `code` | Non-blank, non-comment source lines |
-| `loc` | Total source lines |
-| `comment` / `blank` | Comment-only and blank lines |
-| `bytes` | UTF-8 bytes of the type's source span (the outermost type in a file covers the whole file) |
-| `methods` / `fields` | Declared methods and constructors / declared fields |
-| `members` | Methods + fields + enum constants |
-| `complexity` | Sum of `1 +` branch points (`if`/`for`/`while`/`case`/`catch`/`&&`/`||`/`?:`) |
-| `fanIn` / `fanOut` | Distinct types in the tree that reference this type / that this type references |
-| `luaExposed` | Types carrying `@UsedFromLua` |
+| Metric               | Meaning                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `code`               | Non-blank, non-comment source lines                                                        |
+| `loc`                | Total source lines                                                                         |
+| `comment` / `blank`  | Comment-only and blank lines                                                               |
+| `bytes`              | UTF-8 bytes of the type's source span (the outermost type in a file covers the whole file) |
+| `methods` / `fields` | Declared methods and constructors / declared fields                                        |
+| `members`            | Methods + fields + enum constants                                                          |
+| `complexity`         | Sum of `1 +` branch points (`if`/`for`/`while`/`case`/`catch`/`&&`/`\|\|`/`?:`)            |
+| `fanIn` / `fanOut`   | Distinct types in the tree that reference this type / that this type references            |
+| `luaExposed`         | Types carrying `@UsedFromLua`                                                              |
+
+## Language Support
+
+The header language selector supports changing of display language across all five
+views, controls, tooltips, dialogs, and load errors. The initial language is chosen
+from url path (e.g. `?lang=en`), then the saved preference, then the browser's
+language list; unsupported languages fall back to English.
+
+Switching language reloads the app after saving the current settings and navigation.
+The preference is stored separately as `zombie-atlas.language.v1`; **Restore defaults**
+resets view settings without changing language. Language links also work when browser
+storage is blocked. Permalinks preserve the language query, package selection (`pkg`)
+and minimum code-line filter (`min`).
+
+Java names, packages, annotations, source text, search identifiers and JSON export
+values retain their original spelling. Numbers and relative-time labels follow the
+selected language. The language catalogs are in `src/locales/<language_code>.json`;
+`src/i18n.ts` provides typed `msg()` calls with numbered placeholders (`{0}`, `{1}`) 
+and display-only category translation through `trLabel()`.
+Keep HTML interpolation escaped at its call site, as with the existing tooltips.
+
+To add UI text, add matching entries to both catalogs and call `msg()` at the display
+site. Use stable IDs for selectors, never translated labels. Run
+`node tools/test-i18n.mjs --catalog-only` for key/placeholder checks, and `npm test`
+for browser coverage of both languages and language switching.
 
 ## Views
 
@@ -160,11 +185,11 @@ The inheritance forest, built from the 3,340 types with no internal supertype.
 
 Three modes over the same package graph, switched from the stage actions.
 
-| Mode | Contents |
-| --- | --- |
-| `graph` | Force-directed package graph (`d3-force`). Node radius scales with code size, colour comes from the functional domain, hover dims everything that is not a neighbour and shows code, linked-package counts and total refs. Scroll to zoom around the cursor, drag empty space to pan, drag a node to pin it, double-click a node to centre and zoom on it, double-click empty space (or press `Fit`) to frame the whole graph, and use the `−` / `+` buttons for stepped zoom. Click a node to select its package in the inspector. A press only becomes a drag after the pointer travels ~3px, and gestures are tracked on the window, so panning keeps following the pointer outside the canvas. Pan and zoom are preserved across clicks, mode switches and view changes — the force layout is only recomputed when the node set actually changes, and only `Fit`, a double-click on empty space or a graph rebuild re-frames it. |
-| `matrix` | Adjacency matrix of the busiest packages — row = importing package, column = imported package, cell = number of class-level references. Hovering a cell shows the count and its share of the row; clicking one opens the class-level edges between that pair. |
-| `classes` | The class-edge list for the pair picked in the matrix (or for the selected package), heaviest first. |
+| Mode      | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `graph`   | Force-directed package graph (`d3-force`). Node radius scales with code size, colour comes from the functional domain, hover dims everything that is not a neighbour and shows code, linked-package counts and total refs. Scroll to zoom around the cursor, drag empty space to pan, drag a node to pin it, double-click a node to centre and zoom on it, double-click empty space (or press `Fit`) to frame the whole graph, and use the `−` / `+` buttons for stepped zoom. Click a node to select its package in the inspector. A press only becomes a drag after the pointer travels ~3px, and gestures are tracked on the window, so panning keeps following the pointer outside the canvas. Pan and zoom are preserved across clicks, mode switches and view changes — the force layout is only recomputed when the node set actually changes, and only `Fit`, a double-click on empty space or a graph rebuild re-frames it. |
+| `matrix`  | Adjacency matrix of the busiest packages — row = importing package, column = imported package, cell = number of class-level references. Hovering a cell shows the count and its share of the row; clicking one opens the class-level edges between that pair.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `classes` | The class-edge list for the pair picked in the matrix (or for the selected package), heaviest first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 Graph controls: how many top packages to keep (default 40, range 6–270), the minimum edge weight (default 3) and a `cross-domain only` switch.
 
@@ -192,30 +217,30 @@ The right-hand **inspector** is shared by every view: it shows the project overv
 
 Everything in this section is a control in the sidebar, a stage action or a filter chip, and every setting is persisted.
 
-| Setting | Options |
-| --- | --- |
-| Size metric | Code lines (non-comment), total lines, file size, method count, field count, members, cyclomatic complexity, fan-in (used by), fan-out (uses), Lua exposure, branch density, or a custom composite |
-| Custom composite | Weight sliders (0–1) for code, complexity, methods, fan-in, Lua exposure and file size |
-| Colour by | Functional domain, package, declaration kind, stereotype, fan-in heat, fan-out heat, complexity heat, branch density heat, Lua exposure, nesting depth |
-| Group by | Package hierarchy, functional domain, stereotype, declaration kind, stereotype → domain |
-| Layout | Squarified, slice & dice, binary, strips (plain `treemapSlice` — not d3's `resquarify`, which only exists to keep a squarified layout stable across updates) |
-| Sort | Size, name, fan-in, complexity |
-| Depth limit | 0 (unlimited) to 6 package levels |
-| Padding | 0–8 px between rectangles |
-| Hide below N% of total | Culls rectangles smaller than a share of the whole map |
-| Leaves | Types or members (`M`) |
-| Labels | On (adaptive) or off |
+| Setting                | Options                                                                                                                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Size metric            | Code lines (non-comment), total lines, file size, method count, field count, members, cyclomatic complexity, fan-in (used by), fan-out (uses), Lua exposure, branch density, or a custom composite |
+| Custom composite       | Weight sliders (0–1) for code, complexity, methods, fan-in, Lua exposure and file size                                                                                                             |
+| Colour by              | Functional domain, package, declaration kind, stereotype, fan-in heat, fan-out heat, complexity heat, branch density heat, Lua exposure, nesting depth                                             |
+| Group by               | Package hierarchy, functional domain, stereotype, declaration kind, stereotype → domain                                                                                                            |
+| Layout                 | Squarified, slice & dice, binary, strips (plain `treemapSlice` — not d3's `resquarify`, which only exists to keep a squarified layout stable across updates)                                       |
+| Sort                   | Size, name, fan-in, complexity                                                                                                                                                                     |
+| Depth limit            | 0 (unlimited) to 6 package levels                                                                                                                                                                  |
+| Padding                | 0–8 px between rectangles                                                                                                                                                                          |
+| Hide below N% of total | Culls rectangles smaller than a share of the whole map                                                                                                                                             |
+| Leaves                 | Types or members (`M`)                                                                                                                                                                             |
+| Labels                 | On (adaptive) or off                                                                                                                                                                               |
 
 Filters:
 
-| Filter | Behaviour |
-| --- | --- |
-| Text query | Matches type names, fully-qualified names, packages, stereotypes, annotations and — once member shards are loaded — member names. The search box also offers ranked class and package suggestions; choosing one selects the type or zooms the treemap to the package. |
-| Kind chips | Declaration kinds (class, interface, enum, record, annotation) |
-| Stereotype chips | The twelve most common inferred stereotypes, with counts |
-| Domain chips | All 55 functional domains, with type and code-line counts on hover |
-| Lua only | Restrict to `@UsedFromLua` types |
-| Minimum code lines | Drop types below a code-line threshold |
+| Filter             | Behaviour                                                                                                                                                                                                                                                             |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Text query         | Matches type names, fully-qualified names, packages, stereotypes, annotations and — once member shards are loaded — member names. The search box also offers ranked class and package suggestions; choosing one selects the type or zooms the treemap to the package. |
+| Kind chips         | Declaration kinds (class, interface, enum, record, annotation)                                                                                                                                                                                                        |
+| Stereotype chips   | The twelve most common inferred stereotypes, with counts                                                                                                                                                                                                              |
+| Domain chips       | All 55 functional domains, with type and code-line counts on hover                                                                                                                                                                                                    |
+| Lua only           | Restrict to `@UsedFromLua` types                                                                                                                                                                                                                                      |
+| Minimum code lines | Drop types below a code-line threshold                                                                                                                                                                                                                                |
 
 A `Clear N filters` button appears whenever any filter is active.
 
@@ -249,28 +274,28 @@ repaired on load (19 fields).") and the tooltip on that line lists every repair.
 
 To start over:
 
-| Where | Action |
-| --- | --- |
-| View controls → **Restore defaults** | Discards every saved setting and writes the defaults back |
-| Console | `zombieAtlas.store.resetSettings()`, or read `zombieAtlas.store.storage` for the load report |
-| Empty-state overlay | **Clear filters** (keeps zoom) or **Reset view** (also clears zoom, selection, culling) |
+| Where                                | Action                                                                                       |
+| ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| View controls → **Restore defaults** | Discards every saved setting and writes the defaults back                                    |
+| Console                              | `zombieAtlas.store.resetSettings()`, or read `zombieAtlas.store.storage` for the load report |
+| Empty-state overlay                  | **Clear filters** (keeps zoom) or **Reset view** (also clears zoom, selection, culling)      |
 
 If a filter still applies after clearing storage, the URL hash is re-applying it
 — drop the `#…` part of the address as well.
 
 ## Keyboard shortcuts
 
-| Key | Action |
-| --- | --- |
-| `/` | Focus the search box |
-| `Esc` | In the search box, clear the query; otherwise zoom out one treemap level, or clear the selection at the root |
-| `1` … `5` | Switch to Treemap, Hierarchy, Dependencies, Subsystems, Insights |
-| `T` | Toggle the light/dark theme |
-| `S` | Toggle the sidebar |
-| `I` | Toggle the inspector |
-| `M` | Toggle member-level leaves |
-| `?` | Open the help dialog |
-| `ArrowUp` / `ArrowDown` / `Enter` | Move through and accept search results |
+| Key                               | Action                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `/`                               | Focus the search box                                                                                         |
+| `Esc`                             | In the search box, clear the query; otherwise zoom out one treemap level, or clear the selection at the root |
+| `1` … `5`                         | Switch to Treemap, Hierarchy, Dependencies, Subsystems, Insights                                             |
+| `T`                               | Toggle the light/dark theme                                                                                  |
+| `S`                               | Toggle the sidebar                                                                                           |
+| `I`                               | Toggle the inspector                                                                                         |
+| `M`                               | Toggle member-level leaves                                                                                   |
+| `?`                               | Open the help dialog                                                                                         |
+| `ArrowUp` / `ArrowDown` / `Enter` | Move through and accept search results                                                                       |
 
 Shortcuts are ignored while a text field, select or textarea has focus. Mouse: click selects, double-click zooms or focuses, right-click zooms out to the root, hover reads out the rectangle under the cursor. In the Dependencies graph the wheel zooms and dragging empty space pans.
 
@@ -282,15 +307,15 @@ The bundle is generated straight into `dist/data/`, where both the dev server
 and the production server read it from; it is never committed. Sizes are from
 the current build and drift slightly with each regeneration.
 
-| File | Size | Contents |
-| --- | --- | --- |
-| `meta.json` | ~3 KB | Generation timestamp, source root and its mount, decompiler string, headline counts, domain descriptions, the column lists for `classes.json` and the member shards, and the metric glossary. |
-| `packages.json` | ~86 KB | Nested package tree with per-node aggregates (code, lines, methods, complexity, Lua counts, fan-in/fan-out). |
-| `classes.json` | ~923 KB | Compact columnar records for all 4,749 types; the column names are documented in `meta.json`. |
-| `hierarchy.json` | ~13 KB | Ids of the types with neither an internal supertype nor an interface (the Hierarchy view derives its root list from `classes.json` at runtime). |
-| `deps-packages.json` | ~202 KB | 4,096 `[from, to, weight]` package edges, heaviest first. |
-| `deps-classes.json` | ~408 KB | Class-to-class edges, loaded lazily when a class-level edge list is requested. |
-| `insights.json` | ~41 KB | Top methods by complexity (with body line and branch counts), the rankings, the histograms and the package-coupling table. |
+| File                  | Size                      | Contents                                                                                                                                                                                                                                             |
+| --------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `meta.json`           | ~3 KB                     | Generation timestamp, source root and its mount, decompiler string, headline counts, domain descriptions, the column lists for `classes.json` and the member shards, and the metric glossary.                                                        |
+| `packages.json`       | ~86 KB                    | Nested package tree with per-node aggregates (code, lines, methods, complexity, Lua counts, fan-in/fan-out).                                                                                                                                         |
+| `classes.json`        | ~923 KB                   | Compact columnar records for all 4,749 types; the column names are documented in `meta.json`.                                                                                                                                                        |
+| `hierarchy.json`      | ~13 KB                    | Ids of the types with neither an internal supertype nor an interface (the Hierarchy view derives its root list from `classes.json` at runtime).                                                                                                      |
+| `deps-packages.json`  | ~202 KB                   | 4,096 `[from, to, weight]` package edges, heaviest first.                                                                                                                                                                                            |
+| `deps-classes.json`   | ~408 KB                   | Class-to-class edges, loaded lazily when a class-level edge list is requested.                                                                                                                                                                       |
+| `insights.json`       | ~41 KB                    | Top methods by complexity (with body line and branch counts), the rankings, the histograms and the package-coupling table.                                                                                                                           |
 | `members/<slug>.json` | 266 shards, ~9.7 MB total | Per-package member lists keyed by class id (methods with parameters, throws, modifiers, annotations, line, complexity, body lines and javadoc, plus fields and enum constants). Loaded on demand; the slug is the package with `.` replaced by `__`. |
 
 The bundle is about 11.5 MB in total: roughly 1.7 MB of JSON loaded eagerly and 9.7 MB of member shards fetched on demand.

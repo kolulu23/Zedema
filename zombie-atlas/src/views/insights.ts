@@ -1,3 +1,4 @@
+import { msg, trLabel } from '../i18n';
 /**
  * Insights view — rankings and distributions computed from the source at
  * extraction time (see `insights.json`): the biggest and most complex code, the
@@ -80,8 +81,8 @@ function cardList(): HTMLElement[] {
 
   cards.push(
     card(
-      'Most complex methods',
-      'Sum of branch points + 1, methods with a real body only',
+      msg("Most complex methods"),
+      msg("Sum of branch points + 1, methods with a real body only"),
       rankList(
         d.topMethods
           .slice()
@@ -92,7 +93,7 @@ function cardList(): HTMLElement[] {
         (m) => ({
           label: `${m.cls}.${m.name}`,
           sub: m.params.length ? `(${m.params.join(', ').slice(0, 40)})` : '()',
-          value: memberSort === 'lines' ? `${m.bodyLines} ln` : `cx ${m.complexity}`,
+          value: memberSort === 'lines' ? msg("{0} ln", m.bodyLines) : msg("cx {0}", m.complexity),
           bar: m.complexity / d.topMethods[0].complexity,
           onClick: () => selectClass(m.classId),
         })
@@ -102,7 +103,7 @@ function cardList(): HTMLElement[] {
         { class: 'graph-controls' },
         ...(['complexity', 'branch', 'lines'] as const).map((k) =>
           h('button', {
-            text: k,
+            text: trLabel(k),
             style: memberSort === k ? 'background:var(--accent);color:var(--bg-0)' : '',
             onclick: () => {
               memberSort = k;
@@ -116,37 +117,37 @@ function cardList(): HTMLElement[] {
 
   cards.push(
     card(
-      'Largest types',
-      'Non-comment source lines per type',
-      rankList(d.top.code.slice(0, 14), (r) => rankEntry(r, (v) => `${fmtCompact(v)} ln`, () => {}))
+      msg("Largest types"),
+      msg("Non-comment source lines per type"),
+      rankList(d.top.code.slice(0, 14), (r) => rankEntry(r, (v) => msg("{0} ln", fmtCompact(v)), () => {}))
     )
   );
   cards.push(
     card(
-      'Most depended-upon (fan-in)',
-      'Distinct types in the tree that reference this type',
-      rankList(d.top.fanIn.slice(0, 14), (r) => rankEntry(r, (v) => `${fmtInt(v)} refs`))
+      msg("Most depended-upon (fan-in)"),
+      msg("Distinct types in the tree that reference this type"),
+      rankList(d.top.fanIn.slice(0, 14), (r) => rankEntry(r, (v) => msg("{0} refs", fmtInt(v))))
     )
   );
   cards.push(
     card(
-      'Biggest reusers (fan-out)',
-      'Distinct types this type reaches out to',
-      rankList(d.top.fanOut.slice(0, 14), (r) => rankEntry(r, (v) => `${fmtInt(v)} deps`))
+      msg("Biggest reusers (fan-out)"),
+      msg("Distinct types this type reaches out to"),
+      rankList(d.top.fanOut.slice(0, 14), (r) => rankEntry(r, (v) => msg("{0} deps", fmtInt(v))))
     )
   );
   cards.push(
     card(
-      'Highest branch density',
-      'Complexity per code line — where the tricky logic lives',
+      msg("Highest branch density"),
+      msg("Complexity per code line — where the tricky logic lives"),
       rankList(d.top.density.slice(0, 14), (r) => rankEntry(r, (v) => v.toFixed(2), () => {}, v => Math.min(1, v / 0.6)))
     )
   );
   cards.push(
     card(
-      'Most annotated methods',
-      'Largest @UsedFromLua surface per type',
-      rankList(d.top.luaMembers.slice(0, 14), (r) => rankEntry(r, (v) => `${v} members`))
+      msg("Most annotated methods"),
+      msg("Largest @UsedFromLua surface per type"),
+      rankList(d.top.luaMembers.slice(0, 14), (r) => rankEntry(r, (v) => msg("{0} members", v)))
     )
   );
 
@@ -170,8 +171,8 @@ function cardList(): HTMLElement[] {
   );
   cards.push(
     card(
-      'Strongest package coupling',
-      'Class-level references between packages',
+      msg("Strongest package coupling"),
+      msg("Class-level references between packages"),
       h('table', {}, h('tbody', {}, ...rows))
     )
   );
@@ -179,18 +180,18 @@ function cardList(): HTMLElement[] {
   // histograms
   cards.push(
     card(
-      'Type mix',
-      'Declared kinds across the tree',
-      histo(d.histograms.kinds, (k) => ['class', 'interface', 'enum', 'record', 'annotation'][Number(k)] ?? String(k))
+      msg("Type mix"),
+      msg("Declared kinds across the tree"),
+      histo(d.histograms.kinds, (k) => trLabel(['class', 'interface', 'enum', 'record', 'annotation'][Number(k)] ?? String(k)))
     )
   );
   cards.push(
-    card('Stereotypes', 'Inferred from the declaration itself', histo(d.histograms.stereotypes, (k) => String(k)))
+    card(msg("Stereotypes"), msg("Inferred from the declaration itself"), histo(d.histograms.stereotypes, (k) => trLabel(String(k))))
   );
   cards.push(
     card(
-      'Annotations',
-      'Most frequent annotations in the tree',
+      msg("Annotations"),
+      msg("Most frequent annotations in the tree"),
       histo(
         d.histograms.annotations.slice(0, 14),
         (k) => String(k),
@@ -200,28 +201,28 @@ function cardList(): HTMLElement[] {
   );
   cards.push(
     card(
-      'Largest packages',
-      'Types per package (top 16)',
+      msg("Largest packages"),
+      msg("Types per package (top 16)"),
       histo(d.histograms.packages.slice(0, 16), (k) => String(k))
     )
   );
 
   cards.push(
     card(
-      'Scale',
-      'Everything measured in this build',
+      msg("Scale"),
+      msg("Everything measured in this build"),
       h(
         'dl',
         { class: 'kv' },
-        kv('files parsed', fmtInt(a.meta.counts.files)),
-        kv('types', fmtInt(a.meta.counts.types)),
-        kv('packages', fmtInt(a.meta.counts.packages)),
-        kv('code lines', fmtInt(a.meta.counts.code)),
-        kv('methods', fmtInt(a.meta.counts.methods)),
-        kv('fields', fmtInt(a.meta.counts.fields)),
-        kv('lua-exposed types', fmtInt(a.meta.counts.luaExposed)),
-        kv('mean type size', `${Math.round(totalCode / a.classes.length)} ln`),
-        kv('decompiler', a.meta.decompiler ?? '—')
+        kv(msg("files parsed"), fmtInt(a.meta.counts.files)),
+        kv(msg("types"), fmtInt(a.meta.counts.types)),
+        kv(msg("packages"), fmtInt(a.meta.counts.packages)),
+        kv(msg("code lines"), fmtInt(a.meta.counts.code)),
+        kv(msg("methods"), fmtInt(a.meta.counts.methods)),
+        kv(msg("fields"), fmtInt(a.meta.counts.fields)),
+        kv(msg("lua-exposed types"), fmtInt(a.meta.counts.luaExposed)),
+        kv(msg("mean type size"), msg("{0} ln", Math.round(totalCode / a.classes.length))),
+        kv(msg("decompiler"), a.meta.decompiler ?? '—')
       )
     )
   );
