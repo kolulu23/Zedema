@@ -38,7 +38,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const APP = path.resolve(HERE, '..');
 
 // Chromium and its shared libraries may live inside the project (they do in
-// sandboxes without a system browser) — same plumbing as tools/smoke.mjs.
+// sandboxes without a system browser) — the same plumbing as tools/test/harness.mjs.
 const LOCAL_BROWSERS = path.join(APP, '.pw-browsers');
 if (!process.env.PLAYWRIGHT_BROWSERS_PATH && fs.existsSync(LOCAL_BROWSERS)) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = LOCAL_BROWSERS;

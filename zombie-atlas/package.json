@@ -10,7 +10,10 @@
     "serve": "node tools/serve.mjs",
     "start": "node tools/build.mjs && node tools/serve.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node tools/validate.mjs && node tools/smoke.mjs"
+    "test": "node tools/validate.mjs && node --test tools/test/unit && node tools/test/runner.mjs",
+    "test:unit": "node --test tools/test/unit",
+    "test:browser": "node tools/test/runner.mjs",
+    "test:shots": "node tools/test/runner.mjs --shots"
   },
   "type": "module",
   "devDependencies": {

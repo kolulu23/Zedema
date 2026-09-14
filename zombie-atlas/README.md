@@ -21,17 +21,18 @@ The headless smoke test writes its captures to `.pw-shots/` (gitignored). A fres
 | `.pw-shots/11-groupby-stereotype.png` | Treemap regrouped by inferred stereotype                              |
 | `.pw-shots/12-members.png`            | Member-level leaves inside types                                      |
 
-The directory may also contain extra captures from earlier sessions (`A-root.png`, `B-iso.png`, `C-core.png`, `C-stereotype.png`). Regenerate the set with the smoke test:
+The directory may also contain extra captures from earlier sessions (`A-root.png`, `B-iso.png`, `C-core.png`, `C-stereotype.png`). Screenshots are off by default; regenerate the set with:
 
 ```bash
-npm test             # validate + smoke test
-node tools/smoke.mjs # smoke test only
+npm test              # bundle validation + unit tests + browser suite
+npm run test:shots    # browser suite, writing .pw-shots/
+npm run test:browser  # browser suite only, no screenshots
 ```
 
 ## Quick start
 
 ```bash
-npm install          # dependencies (Playwright is only needed for the smoke test)
+npm install          # dependencies (Playwright is only needed for the browser tests)
 npm start            # extract the data, build, and serve → http://127.0.0.1:5184/
 ```
 
@@ -55,9 +56,12 @@ environment variables that plugin reads.
 | `npm run serve`                    | Serve the existing `dist/` plus the raw sources at http://127.0.0.1:5184/.                                                     |
 | `npm start`                        | `npm run build` followed by `node tools/serve.mjs`.                                                                            |
 | `npm run typecheck`                | `tsc --noEmit`.                                                                                                                |
-| `npm test`                         | `npm run validate` followed by the smoke test.                                                                                 |
-| `node tools/smoke.mjs [--url ...]` | Headless-browser test of all 66 checks; serves `dist/` itself unless `--url` is given, and writes screenshots to `.pw-shots/`. |
-| `sh tools/pw.sh <command>`         | Run any command with the project-local Chromium and shared libraries on the path (the smoke test does this for itself).        |
+| `npm test`                         | `npm run validate`, then the unit tests, then the browser suite.                                                               |
+| `npm run test:unit`                | Pure Node tests: locale catalogs, no browser or dataset needed.                                                                |
+| `npm run test:browser`             | The browser suite. Starts its own server on a free port unless `--port`/`--url` is given.                                      |
+| `npm run test:shots`               | The browser suite, also writing screenshots to `.pw-shots/`.                                                                   |
+| `node tools/test/runner.mjs --spec treemap` | Run one spec (matched by filename). Add `--list` to see them, `--bail` to stop at the first failing spec.             |
+| `sh tools/pw.sh <command>`         | Run any command with the project-local Chromium and shared libraries on the path (the test runner does this for itself).      |
 
 Extra flags accepted by `tools/build.mjs`:
 
@@ -156,9 +160,9 @@ and display-only category translation through `trLabel()`.
 Keep HTML interpolation escaped at its call site, as with the existing tooltips.
 
 To add UI text, add matching entries to both catalogs and call `msg()` at the display
-site. Use stable IDs for selectors, never translated labels. Run
-`node tools/test-i18n.mjs --catalog-only` for key/placeholder checks, and `npm test`
-for browser coverage of both languages and language switching.
+site. Use stable IDs for selectors, never translated labels. `npm run test:unit`
+checks catalog key and placeholder parity, and `npm test` adds browser coverage of
+both languages and language switching.
 
 ## Views
 
@@ -340,9 +344,54 @@ The bundle is about 11.5 MB in total: roughly 1.7 MB of JSON loaded eagerly and 
 - **Heritage.** Of 2,239 `extends`/`implements` clauses checked, 2,041 resolve to types inside the tree and 187 point at external JDK/Kahlua types (`RuntimeException`, `Thread`, `ArrayList`, `Iterator`, `JavaFunction`, …) — an internal coverage of 99.5%. The remaining 11 lines are ambiguous re-declarations of the same simple name in one file; each was inspected by hand and resolves correctly in the shipped bundle.
 - **Exit code.** The tool exits non-zero when discrepancies exceed 5% of the files checked, and prints the first 40 of them (`--verbose` prints all). Because the naive scanner raises far more false alarms than the parser has real misses, read the per-file lines rather than the exit status: it is a smoke alarm on the parser, not a clean bill of health for the scanner.
 
-### Browser smoke test
+### Test suite
 
-`node tools/smoke.mjs [--url http://127.0.0.1:5184/]` loads the built SPA in headless Chromium, exercises every view and the main interactions, fails on console errors or missing DOM, and writes the screenshots listed above. Its 66 checks cover loading, the painted treemap, hover, zooming (including a second double-click inside a zoomed view, which used to snap back to the root, and a zoom path that names an id no longer on the way down), search and selection, the source viewer, the hierarchy, the dependency graph and matrix, the domain cards and their treemap filter, the insight cards, theming, metric and grouping switches, member-level leaves (a run takes the treemap from 557 to 13,717 leaves), the help dialog, the JSON export download, the permalink round-trip, panel scrolling (every scroll container must reach its bottom edge at both 1680x1000 and 1280x720), dependency wheel zoom in/out, drag-panning and post-fit layout stability, the source mount plumbing (a class's own file must be fetchable from `/src/<mount>/`, and an unknown mount must 404 rather than return HTML), the empty-state recovery path (a filter set that matches nothing must explain itself and offer Clear filters / Reset view, and the search box must show the query that is actually filtering), the persistence layer (defaults are rewritten after a storage wipe, a payload with the wrong type in every field is repaired field by field, and the Restore defaults button resets both state and storage), and a console-error sweep. It starts and stops its own server, and picks up the project-local Chromium (`.pw-browsers/`) and shared libraries (`.pw-libs/`) automatically, so `npm test` works without any wrapper.
+Three layers, cheapest first:
+
+| Layer | Command | Covers |
+| ----- | ------- | ------ |
+| Bundle validation | `npm run validate` | The extracted JSON checked against the raw tree (see above). |
+| Unit tests | `npm run test:unit` | Pure functions and files. No browser, no dataset. |
+| Browser suite | `npm run test:browser` | The built app in headless Chromium: every view, interaction, persistence path and export. |
+
+The browser suite is a set of independent specs rather than one long session:
+
+```
+tools/test/
+  runner.mjs      # discovers specs, one browser + server per run, per-spec context, reporting
+  harness.mjs     # server spawn/probe, browser launch, page factory, console-error capture
+  kit.mjs         # the `t` object: t.test(), t.todo(), t.shot(), t.newApp(), t.switchLanguage()
+  locators.mjs    # every selector in the suite, in one place
+  seam.mjs        # the only place that reaches into application internals
+  probes.mjs      # canvas pixel sampling, canvas signatures, scroll reachability
+  fixtures.mjs    # shared constants: the settings key, IsoPlayer, known zoom paths
+  specs/*.spec.mjs
+  unit/*.test.mjs
+```
+
+Conventions that stop the suite from fighting the source:
+
+- **Specs never write a selector.** They ask `locators.mjs` for a thing — a tab, a stage action, a control found by its visible label — and that module decides how to find it. A UI restructure becomes a change in one file, and the positional `select >> nth=3` juggling is gone.
+- **Specs never touch `window.zombieAtlas`.** Everything goes through `seam.mjs` as named, data-driven operations (`seam.store.apply({...})`, `seam.treemap.findGroup(page)`), because Playwright cannot pass a function across the page boundary.
+- **One spec file per area, one browser context each.** Specs cannot leak state into one another, and each spec ends with a console-error sweep for its own page, so a failure names an area rather than the whole app. A failing test no longer aborts the run — the old single script lost every result it had gathered if one element went missing.
+- **Regression guards are named tests.** The defects that prompted them are described in the spec that asserts them.
+
+Screenshots are opt-in (`npm run test:shots`); `.pw-shots/` is gitignored.
+
+#### Known defects
+
+Behaviour that is currently broken is recorded with `t.todo()`. It does not fail the run, but it stays visible in the output with its root cause, and it flips to `XPASS` once it starts passing so it can be promoted to a real assertion.
+
+| Spec | Defect |
+| ---- | ------ |
+| `treemap` | The member level silently does nothing when zoomed into a nested package: `ensureMembers()` resolves the zoom package with `find()` — the outermost `p:` segment — while the rectangles on screen belong to the deepest one, so the needed shard is never fetched. |
+| `customisation` | `S`, `I` and the settings button flip `settings.sidebar` / `settings.inspector`, and `.workspace.no-sidebar` / `.no-inspector` exist in `styles.css`, but nothing ever applies those classes — the panels never collapse. |
+| `permalink` | `applyUrl()` validates `view`, `depMode`, `sizeMetric` and `theme`, then assigns `colorMode`, `groupBy` and `layout` with a bare cast. A malformed link produces a legend that disagrees with the map and raw untranslated strings in the status bar. |
+| `persistence` | The sidebar's repair note is overwritten by the first state change, so a repair is announced on load and silently un-announced as soon as a control is touched. |
+| `hierarchy` | The "lua only" checkbox does nothing until filter text is typed: both call sites guard the whole predicate with `!filterText \|\|`, so `matches()` never consults `useLuaFilter`. |
+| `insights` | The "branch" sort is indistinguishable from "complexity" — complexity is defined as branch points + 1, so both orderings and both value labels come out identical. |
+
+The suite starts its own server on a free port and picks up the project-local Chromium (`.pw-browsers/`) and shared libraries (`.pw-libs/`) automatically, so `npm test` works without any wrapper.
 
 ### Showcase trailer
 
@@ -397,10 +446,18 @@ zombie-atlas/
     lib/config.mjs        Source/output discovery (ZOMBIE_SRC, --src, .env)
     validate.mjs          Independent cross-check of the bundle
     serve.mjs             Production server: dist/ plus /src/<mount>/**
-    smoke.mjs             Headless-browser smoke test
     trailer.mjs           Records the showcase trailer (viewport capture + encode)
     pw.sh                 Runs a command with the bundled Chromium and libraries
     lib/java-lexer.mjs    Comment/string masking, brace depth, signature helpers
+    test/
+      runner.mjs          Spec discovery, reporting, exit code
+      harness.mjs         Server/browser/page plumbing
+      kit.mjs             The `t` test context
+      locators.mjs        Every selector the suite uses
+      seam.mjs            The only reader of window.zombieAtlas internals
+      probes.mjs          Canvas and scroll measurements
+      specs/              One spec per area
+      unit/               Pure Node tests (locale catalogs)
   dist/                   Generated app bundle and dist/data/ JSON bundle (gitignored)
   .pw-shots/              Smoke-test screenshots (gitignored)
   .pw-video/              Trailer output: mp4/webm, checkpoint frames (gitignored)
@@ -432,16 +489,17 @@ node tools/extract.mjs --pretty                  # indented JSON for diffing
 
 - Node.js with npm is the only build requirement; the pipeline is plain Node ESM
   and the app has no runtime dependencies beyond the bundled `d3-*` packages.
-- The smoke test needs Chromium and its shared libraries. Neither is installed
+- The browser suite needs Chromium and its shared libraries. Neither is installed
   system-wide in this sandbox, so both ship inside the project: `.pw-browsers/`
   (installed with `npx playwright install chromium`) and `.pw-libs/`, which was
   populated with `apt-get download` plus `dpkg-deb -x` when the system libraries
-  were missing. `tools/pw.sh` exports `PLAYWRIGHT_BROWSERS_PATH` and
-  `LD_LIBRARY_PATH` for both and execs the command it is given:
+  were missing. The test harness exports `PLAYWRIGHT_BROWSERS_PATH` and
+  `LD_LIBRARY_PATH` for itself, so `npm test` needs no wrapper; `tools/pw.sh`
+  does the same for any other command:
 
 ```bash
-sh tools/pw.sh node tools/smoke.mjs
-sh tools/pw.sh node tools/smoke.mjs --url http://127.0.0.1:5184/
+sh tools/pw.sh node tools/trailer.mjs
+sh tools/pw.sh node tools/test/runner.mjs --spec treemap
 ```
 
 - `npm run dev` keeps the atlas in step with the tree: it generates the bundle
