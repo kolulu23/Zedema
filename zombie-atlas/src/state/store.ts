@@ -11,7 +11,7 @@
  * mutations costs one re-render.
  */
 
-import type { Atlas } from '../data';
+import type { Atlas } from '../domain';
 import { buildDefaults } from './schema';
 import { loadSettings, saveSettings, type StorageReport } from './persist';
 import { decodeParams, readUrl, writeUrl, type AtlasLookup } from './permalink';

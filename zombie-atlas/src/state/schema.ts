@@ -20,7 +20,7 @@
  * plain Node for unit tests (`node --test` strips the types directly).
  */
 
-import { METRIC_KEYS } from '../data';
+import { METRIC_KEYS } from '../domain';
 import { PALETTE_NAMES } from '../shared/color';
 
 /* ------------------------------------------------------------------ types -- */

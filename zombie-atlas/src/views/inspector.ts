@@ -17,7 +17,7 @@ import {
   ancestryOf,
   descendantsOf,
   KIND_NAMES,
-} from '../data';
+} from '../domain';
 import { store, type AppState } from '../state';
 import { $, fmtBytes, fmtCompact, fmtInt, h } from '../util';
 import { openSource } from './source';

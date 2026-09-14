@@ -142,6 +142,9 @@ export async function openApp(browser, opts = {}) {
 
   const context = await browser.newContext({ locale, viewport, deviceScaleFactor: 1 });
   if (route) await route(context);
+  if (!url) {
+    throw new Error('openApp() needs a url — take one from startServer(), or from `t.url` inside a spec');
+  }
 
   const page = await context.newPage();
   const errors = [];

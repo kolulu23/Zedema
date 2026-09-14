@@ -5,7 +5,7 @@ import { msg, trLabel } from '../i18n';
  * load-bearing hubs, the Lua API surface and the package coupling table.
  */
 
-import { type Atlas } from '../data';
+import { type Atlas } from '../domain';
 import { store, type AppState } from '../state';
 import { fmtCompact, fmtInt, h } from '../util';
 

@@ -1,0 +1,14 @@
+/**
+ * The domain layer: the extracted dataset, and nothing else.
+ *
+ * Pure — no DOM, no i18n, no store — so it can be imported by views, by the
+ * state layer, and by unit tests without dragging in a browser.
+ *
+ * Imports elsewhere reach it as `../domain`.
+ */
+
+export * from './types';
+export * from './metrics';
+export * from './atlas';
+export * from './members';
+export * from './queries';

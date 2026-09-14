@@ -65,6 +65,55 @@ export default {
       return `404 · ${oneLine(body).slice(0, 40)}`;
     });
 
+    /**
+     * Regression guard for a defect found while unit-testing the highlighter.
+     *
+     * The keyword pass ran over the whole line *after* the string and comment
+     * passes had inserted their spans, and `var` is a Java keyword — so it was
+     * being replaced inside the highlighter's own `style="color:var(--warn)"`
+     * attributes. Every string and comment mark came out with a span nested
+     * inside its tag, which corrupted the attribute and the surrounding markup.
+     *
+     * Nothing caught it: the code still *looked* like highlighted Java, and the
+     * only existing assertion was on the row count.
+     */
+    await t.test('the highlighted markup is well formed', async () => {
+      await seam.store.apply(page, { classIdByName: ISO_PLAYER });
+      const button = inspectorAction(page, 'View source');
+      await button.waitFor({ timeout: 10000 });
+      await button.click();
+      await sourceRows(page).first().waitFor({ timeout: 15000 });
+
+      const report = await page.evaluate(() => {
+        const cells = [...document.querySelectorAll('.src-code tr td:not(.ln)')];
+        const broken = [];
+        for (const td of cells) {
+          const html = td.innerHTML;
+          // A span opening inside another tag means an attribute was rewritten.
+          if (/<[^>]*<span/.test(html)) broken.push(html.slice(0, 120));
+        }
+        const colourOf = (td) => getComputedStyle(td.querySelector('span') ?? td).color;
+        return {
+          cells: cells.length,
+          broken: broken.slice(0, 3),
+          brokenCount: broken.length,
+          highlighted: cells.filter((td) => td.innerHTML.includes('<span')).length,
+          colours: new Set(cells.map(colourOf)).size,
+        };
+      });
+
+      t.assert.ok(report.cells > 50, `only ${report.cells} source cells`);
+      t.assert.deepEqual(report.broken, [], `${report.brokenCount} cells contain a span inside a tag`);
+      t.assert.ok(report.highlighted > report.cells * 0.5, `only ${report.highlighted}/${report.cells} cells highlighted`);
+      // Untouched, keyword, string and comment text must resolve to distinct
+      // colours — one colour would mean the spans render but do nothing.
+      t.assert.ok(report.colours >= 3, `only ${report.colours} distinct text colours`);
+
+      await modalPrimary(page).click();
+      await t.settle(250);
+      return `${report.cells} cells · ${report.highlighted} highlighted · ${report.colours} colours`;
+    });
+
     await t.test('no console errors', async () => {
       t.assert.deepEqual(t.errors, [], t.errors.slice(0, 3).join(' | '));
       return 'clean';

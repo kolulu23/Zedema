@@ -5,7 +5,7 @@
  * (unit tests, and the persistence layer) without dragging in the atlas types.
  */
 
-import type { Atlas } from '../data';
+import type { Atlas } from '../domain';
 import type { Settings } from './schema';
 
 export type ViewId = 'treemap' | 'hierarchy' | 'dependencies' | 'subsystems' | 'insights';

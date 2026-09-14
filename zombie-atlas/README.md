@@ -351,8 +351,10 @@ Three layers, cheapest first:
 | Layer | Command | Covers |
 | ----- | ------- | ------ |
 | Bundle validation | `npm run validate` | The extracted JSON checked against the raw tree (see above). |
-| Unit tests | `npm run test:unit` | Pure functions and files. No browser, no dataset. |
+| Unit tests | `npm run test:unit` | The settings schema and codec, the permalink round trip, filtering and search, the Java highlighter, the locale catalogs. No browser, no dataset — ~80 cases in about a tenth of a second. |
 | Browser suite | `npm run test:browser` | The built app in headless Chromium: every view, interaction, persistence path and export. |
+
+The unit layer imports the application's TypeScript directly — `node --test` strips the types — so the pure parts of `src/` are tested against the real modules rather than a copy. `tools/test/ts-resolve.mjs` supplies the two things Node needs for that: extension resolution for the Vite-style imports, and enough of a `location`/`localStorage` for `i18n.ts` to load.
 
 The browser suite is a set of independent specs rather than one long session:
 
@@ -429,10 +431,17 @@ zombie-atlas/
   tsconfig.json           Strict TypeScript, ES2022, noEmit
   src/
     main.ts               Bootstrap, view switching, controls, legend, breadcrumbs, exports, help
-    data.ts               Bundle loading, indexes, filtering, metric accessors
-    util.ts               Formatting, canvas text fitting
+    util.ts               Formatting, DOM helper, canvas text fitting
+    domain/               The extracted dataset. Pure: no DOM, no i18n, no store.
+      types.ts            ClassRec / PkgNode / MemberRec / Atlas and friends
+      metrics.ts          Declaration kinds, metric keys and accessors
+      atlas.ts            Bundle loading and index building
+      members.ts          Lazily-fetched member and class-edge shards
+      queries.ts          Ancestry, descendants, package paths
+      index.ts            Barrel — imports elsewhere use `../domain`
     shared/
       color.ts            Colour maths and the sequential ramps
+      text.ts             `esc`, for anything that builds HTML
     state/
       schema.ts           The settings schema: one entry per setting, driving
                           defaults, storage validation and the permalink
@@ -444,6 +453,7 @@ zombie-atlas/
       index.ts            Barrel — the rest of the app imports `./state`
     styles.css            Themes and layout
     views/
+      source/             Source-viewer modal + the Java highlighter (pure, tested)
       treemap.ts          Canvas treemap, zoom, labels, tooltip, exports
       hierarchy.ts        Inheritance forest
       dependencies.ts     Force graph, adjacency matrix, class-edge list

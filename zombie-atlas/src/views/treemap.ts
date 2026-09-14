@@ -21,7 +21,7 @@ import {
   metricValue,
   pkgMetricValue,
   loadMembers,
-} from '../data';
+} from '../domain';
 import { store, type AppState, type Settings, type ColorMode } from '../state';
 import { fmtBytes, fmtCompact, fmtInt, fitText, hashCode, lighten, pct, rgba, sampleRamp, esc } from '../util';
 

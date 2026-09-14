@@ -17,7 +17,7 @@ import {
   METRIC_KEYS,
   type MetricKey,
   loadAtlas,
-} from './data';
+} from './domain';
 import { store, searchAtlas, type AppState, type Settings, type ViewId, applyFilters } from './state';
 import { TreemapView, type TNode } from './views/treemap';
 import { initHierarchy, renderHierarchy, teardownHierarchy, hierarchyStats } from './views/hierarchy';

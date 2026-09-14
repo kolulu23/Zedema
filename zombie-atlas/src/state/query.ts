@@ -3,15 +3,13 @@
  * and the search box into ranked hits.
  */
 
-import type { Atlas } from '../data';
+import type { Atlas } from '../domain';
 import { msg, locale } from '../i18n';
 import type { Settings } from './schema';
 
 export interface FilterResult {
   /** ids passing every filter */
   ids: Set<number>;
-  /** ids matching the text query only (used for highlighting) */
-  matched: Set<number> | null;
   total: number;
 }
 
@@ -28,8 +26,6 @@ export function applyFilters(
   const f = s.filters;
   const q = f.query.trim().toLowerCase();
   const ids = new Set<number>();
-  let matched: Set<number> | null = null;
-  if (q) matched = new Set();
 
   const domainSet = f.domains.length ? new Set(f.domains) : null;
   const kindSet = f.kinds.length ? new Set(f.kinds) : null;
@@ -49,14 +45,11 @@ export function applyFilters(
         const names = memberNames.get(c.id);
         if (names) hit = names.some((n) => n.includes(q));
       }
-      if (matched) {
-        if (hit) matched.add(c.id);
-      }
       if (!hit) continue;
     }
     ids.add(c.id);
   }
-  return { ids, matched, total: atlas.classes.length };
+  return { ids, total: atlas.classes.length };
 }
 
 /** Text used by the search box: classes + packages + member index. */
