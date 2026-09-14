@@ -12,7 +12,7 @@ import { msg, trLabel } from '../i18n';
 
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
 import type { SimulationNodeDatum } from 'd3-force';
-import { type Atlas, loadClassDeps } from '../data';
+import { type Atlas, loadClassDeps } from '../domain';
 import { store, type AppState, type DepMode } from '../state';
 import { fitText, fmtCompact, fmtInt, h, rgba, sampleRamp, esc } from '../util';
 

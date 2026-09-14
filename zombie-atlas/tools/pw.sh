@@ -6,7 +6,10 @@
 #   .pw-browsers/   chromium (npx playwright install chromium)
 #   .pw-libs/root/  shared libraries extracted from .deb packages
 #
-# Usage:  sh tools/pw.sh node tools/smoke.mjs
+# The test harness exports these for itself, so `npm test` needs no wrapper;
+# this is for any other command that needs a browser.
+#
+# Usage:  sh tools/pw.sh node tools/trailer.mjs
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 APP=$(dirname "$HERE")

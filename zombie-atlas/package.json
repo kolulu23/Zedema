@@ -10,7 +10,10 @@
     "serve": "node tools/serve.mjs",
     "start": "node tools/build.mjs && node tools/serve.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node tools/validate.mjs && node tools/smoke.mjs"
+    "test": "node tools/validate.mjs && node --import ./tools/test/ts-resolve.mjs --test tools/test/unit/*.test.mjs && node tools/test/runner.mjs",
+    "test:unit": "node --import ./tools/test/ts-resolve.mjs --test tools/test/unit/*.test.mjs",
+    "test:browser": "node tools/test/runner.mjs",
+    "test:shots": "node tools/test/runner.mjs --shots"
   },
   "type": "module",
   "devDependencies": {
@@ -21,13 +24,15 @@
     "@types/node": "^26.5.1",
     "playwright": "^1.63.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "vite-plugin-solid": "^2.11.14"
   },
   "dependencies": {
     "d3-force": "^3.0.0",
     "d3-hierarchy": "^3.1.2",
     "d3-scale": "^4.0.2",
-    "d3-selection": "^3.0.0"
+    "d3-selection": "^3.0.0",
+    "solid-js": "^1.9.15"
   },
   "private": true
 }

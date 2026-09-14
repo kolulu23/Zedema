@@ -8,7 +8,7 @@ import { msg, trLabel } from '../i18n';
  * read at a glance. Cards are clickable and drive the treemap filters.
  */
 
-import { type Atlas, type DomainInfo } from '../data';
+import { type Atlas, type DomainInfo } from '../domain';
 import { store, type AppState } from '../state';
 import { fmtCompact, fmtInt, h, pct } from '../util';
 

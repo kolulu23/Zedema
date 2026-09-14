@@ -11,6 +11,8 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
     "noEmit": true,
     "types": ["vite/client"]
   },

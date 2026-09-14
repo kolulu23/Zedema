@@ -8,7 +8,7 @@ import { msg, trLabel } from '../i18n';
  * dashed children when "show interfaces" is on.
  */
 
-import { type Atlas, type ClassRec, KIND_NAMES } from '../data';
+import { type Atlas, type ClassRec, KIND_NAMES } from '../domain';
 import { store, type AppState } from '../state';
 import { fmtCompact, h } from '../util';
 

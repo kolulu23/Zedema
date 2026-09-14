@@ -1,4 +1,4 @@
-import { msg } from '../i18n';
+import { msg } from '../../i18n';
 /**
  * Source viewer — renders the actual decompiled file for a class.
  *
@@ -7,22 +7,11 @@ import { msg } from '../i18n';
  * instead of a copy that could drift.
  */
 
-import type { ClassRec } from '../data';
-import { esc, h } from '../util';
+import type { ClassRec } from '../../domain';
+import { h } from '../../util';
+import { highlight } from './highlight';
 
 let modalRoot: HTMLElement | null = null;
-
-const KEYWORDS =
-  /\b(abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|record|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|var|void|volatile|while|true|false|null)\b/g;
-
-function highlight(line: string): string {
-  let out = esc(line);
-  // strings & comments first (crude but safe: escaped text, no HTML injection)
-  out = out.replace(/(&quot;.*?&quot;|'.*?')/g, '<span style="color:var(--warn)">$1</span>');
-  out = out.replace(/^(\s*)(\/\/.*|\*.*|\/\*.*)$/, '$1<span style="color:var(--fg-3)">$2</span>');
-  out = out.replace(KEYWORDS, '<span style="color:var(--accent-2)">$1</span>');
-  return out;
-}
 
 export async function openSource(c: ClassRec) {
   if (!modalRoot) modalRoot = document.getElementById('modal-root')!;

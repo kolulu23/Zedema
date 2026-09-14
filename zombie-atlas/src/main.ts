@@ -1,13 +1,19 @@
+import { render } from 'solid-js/web';
 import { msg, trLabel, initLanguage } from './i18n';
 /**
  * Zombie Atlas — application bootstrap.
  *
- * Wires the store, the views, the customisation sidebar, search, breadcrumbs
- * and the render loop together. Everything the UI shows is derived from the
- * JSON bundle produced by `tools/extract.mjs`.
+ * Renders the shell (see `app/app.tsx`), then wires the store, the views, the
+ * customisation sidebar, search, breadcrumbs and the render loop together.
+ * Everything the UI shows is derived from the JSON bundle produced by
+ * `tools/extract.mjs`.
+ *
+ * The shell mounts *before* `initLanguage()` runs, because that wires the
+ * language `<select>` by id and the element has to exist first.
  */
 
 import './styles.css';
+import { App } from './app/app';
 import {
   type Atlas,
   type ClassRec,
@@ -17,7 +23,7 @@ import {
   METRIC_KEYS,
   type MetricKey,
   loadAtlas,
-} from './data';
+} from './domain';
 import { store, searchAtlas, type AppState, type Settings, type ViewId, applyFilters } from './state';
 import { TreemapView, type TNode } from './views/treemap';
 import { initHierarchy, renderHierarchy, teardownHierarchy, hierarchyStats } from './views/hierarchy';
@@ -1215,6 +1221,11 @@ function renderStatus(s: AppState) {
   bits.push(h('span', { text: `${trLabel(s.settings.sizeMetric)} · ${trLabel(s.settings.colorMode)} · ${trLabel(s.settings.groupBy)}` }));
   bar.replaceChildren(...bits);
 }
+
+// Mount the shell first: `initLanguage()` reaches for `#language` by id.
+const mount = document.getElementById('root');
+if (!mount) throw new Error('missing #root — index.html must provide the mount point');
+render(App, mount);
 
 initLanguage(() => {
   if (store.state.ready) {
