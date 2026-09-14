@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
+import solid from 'vite-plugin-solid';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error - plain JS helper shared with the CLI tools
@@ -173,7 +174,7 @@ export default defineConfig({
   // Nothing is copied into dist/: the app is bundled and the data is written
   // into dist/data by the plugin above.
   publicDir: false,
-  plugins: [atlasDataPlugin()],
+  plugins: [solid(), atlasDataPlugin()],
   build: {
     target: 'es2022',
     outDir: 'dist',

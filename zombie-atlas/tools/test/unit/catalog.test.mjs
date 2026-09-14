@@ -49,10 +49,24 @@ test('placeholders match between catalogs', () => {
 });
 
 test('the shell markup only references known messages', () => {
-  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  // The shell moved from `index.html` into JSX, so the scan follows it. A
+  // `msg()` key is already compile-checked (`MessageKey`); what this adds is
+  // coverage of the shell file itself, so a literal that was never wrapped in
+  // `msg()` shows up as a key that does not exist.
+  const shell = fs.readFileSync(path.join(ROOT, 'src', 'app', 'App.tsx'), 'utf8');
   const missing = [];
-  for (const [, key] of html.matchAll(/data-i18n(?:-[a-z-]+)?="([^"]+)"/g)) {
+  for (const [, key] of shell.matchAll(/\bmsg\(\s*'([^']+)'/g)) {
     if (!Object.hasOwn(en, key)) missing.push(key);
   }
   assert.deepEqual(missing, []);
+});
+
+test('the shell no longer relies on data-i18n attributes', () => {
+  // `initLanguage()` still walks `[data-i18n]` for any markup that needs it,
+  // but the shell renders its own translated text. A leftover attribute would
+  // be silently overwritten.
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.ok(!html.includes('data-i18n'), 'index.html still carries data-i18n attributes');
+  const shell = fs.readFileSync(path.join(ROOT, 'src', 'app', 'App.tsx'), 'utf8');
+  assert.ok(!shell.includes('data-i18n'), 'App.tsx still carries data-i18n attributes');
 });
