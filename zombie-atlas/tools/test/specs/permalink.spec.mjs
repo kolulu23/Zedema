@@ -113,27 +113,26 @@ export default {
     });
 
     /**
-     * Known defect: the URL path skips the validation the storage path performs.
+     * Regression guard for a defect the restructured suite surfaced.
      *
-     * `Store.applyUrl()` guards `view`, `depMode`, `sizeMetric` and `theme`, but
-     * assigns `colorMode`, `groupBy` and `layout` straight from the query string
-     * with a bare cast (src/state.ts, the `p.get('c')` / `p.get('g')` /
-     * `p.get('l')` branches). `coerceSettings()` validates the same three fields
-     * against allow-lists when they come from localStorage.
+     * `Store.applyUrl()` used to validate `view`, `depMode`, `sizeMetric` and
+     * `theme`, then assign `colorMode`, `groupBy` and `layout` straight from the
+     * query string with a bare cast — while the storage path validated those
+     * same three fields against allow-lists. A malformed link produced a state
+     * no control could reach: the treemap fell back to its default colouring
+     * while the legend switched on `colorMode` and listed domains, so the two
+     * disagreed, and the status bar echoed the raw string back at the user.
+     * Nothing threw, which is why it survived this long.
      *
-     * A malformed or stale link therefore produces a state no control can reach:
-     * the treemap falls back to its default colouring while the legend switches
-     * on `colorMode` and renders the domain list, so the two disagree, and the
-     * status bar echoes the raw untranslated string back at the user. Nothing
-     * throws — the app degrades, it does not crash — which is why this survived.
+     * Both channels now run through one set of field specs, so this is fixed.
      */
-    await t.todo('unrecognised enum values in a permalink fall back to their defaults', async () => {
+    await t.test('unrecognised enum values in a permalink fall back to their defaults', async () => {
       const app = await t.newApp({ hash: '#c=garbage&g=garbage&l=garbage' });
       const settings = await seam.store.settings(app.page);
       t.assert.equal(settings.colorMode, 'domain', `colorMode=${settings.colorMode}`);
       t.assert.equal(settings.groupBy, 'package', `groupBy=${settings.groupBy}`);
       t.assert.equal(settings.layout, 'squarify', `layout=${settings.layout}`);
-      return 'all three validated';
+      return 'all three rejected and defaulted';
     });
 
     await t.test('no console errors', async () => {

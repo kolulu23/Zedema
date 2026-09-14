@@ -386,10 +386,11 @@ Behaviour that is currently broken is recorded with `t.todo()`. It does not fail
 | ---- | ------ |
 | `treemap` | The member level silently does nothing when zoomed into a nested package: `ensureMembers()` resolves the zoom package with `find()` — the outermost `p:` segment — while the rectangles on screen belong to the deepest one, so the needed shard is never fetched. |
 | `customisation` | `S`, `I` and the settings button flip `settings.sidebar` / `settings.inspector`, and `.workspace.no-sidebar` / `.no-inspector` exist in `styles.css`, but nothing ever applies those classes — the panels never collapse. |
-| `permalink` | `applyUrl()` validates `view`, `depMode`, `sizeMetric` and `theme`, then assigns `colorMode`, `groupBy` and `layout` with a bare cast. A malformed link produces a legend that disagrees with the map and raw untranslated strings in the status bar. |
 | `persistence` | The sidebar's repair note is overwritten by the first state change, so a repair is announced on load and silently un-announced as soon as a control is touched. |
 | `hierarchy` | The "lua only" checkbox does nothing until filter text is typed: both call sites guard the whole predicate with `!filterText \|\|`, so `matches()` never consults `useLuaFilter`. |
 | `insights` | The "branch" sort is indistinguishable from "complexity" — complexity is defined as branch points + 1, so both orderings and both value labels come out identical. |
+
+One entry has since been fixed and promoted to a normal assertion: a permalink could set `colorMode`, `groupBy` and `layout` to unvalidated values, because the URL path cast where the storage path validated. Both channels now run through the same field specs in `src/state/schema.ts`.
 
 The suite starts its own server on a free port and picks up the project-local Chromium (`.pw-browsers/`) and shared libraries (`.pw-libs/`) automatically, so `npm test` works without any wrapper.
 
@@ -429,8 +430,18 @@ zombie-atlas/
   src/
     main.ts               Bootstrap, view switching, controls, legend, breadcrumbs, exports, help
     data.ts               Bundle loading, indexes, filtering, metric accessors
-    state.ts              Observable store, localStorage settings, URL-hash permalinks
-    util.ts               Formatting, colour ramps, canvas text fitting
+    util.ts               Formatting, canvas text fitting
+    shared/
+      color.ts            Colour maths and the sequential ramps
+    state/
+      schema.ts           The settings schema: one entry per setting, driving
+                          defaults, storage validation and the permalink
+      persist.ts          localStorage codec + the repair report
+      permalink.ts        Compact, shareable URL encoding (pure core + DOM wrapper)
+      query.ts            Filtering and ranked search
+      store.ts            The observable store
+      types.ts            AppState / Selection / view ids
+      index.ts            Barrel — the rest of the app imports `./state`
     styles.css            Themes and layout
     views/
       treemap.ts          Canvas treemap, zoom, labels, tooltip, exports
