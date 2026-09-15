@@ -1,0 +1,29 @@
+module Base
+{
+    /*  Handheld grapple launcher.
+
+        The item itself is deliberately harmless. MinDamage/MaxDamage are 0, and
+        the weapon is not ranged, so the engine never spawns a bullet and never
+        runs the native ballistics pipeline for it; the hook is owned entirely by
+        the Lua layer (media/lua/*/grapplehook).
+
+        ItemType is the Build 42 item-class key: zombie/scripting/objects/Item.java
+        parses "ItemType" (Item.java:2453). A bare "Type" key matches no parser
+        branch anywhere in the decompiled tree, is silently filed as moddata
+        (Item.java:3466) and leaves the item without a class, which then throws
+        when the item is instantiated. */
+    item GrappleHook
+    {
+        ItemType = Weapon,
+        DisplayName = Grapple Hook,
+        Icon = GrappleHook,
+        Weight = 2.0,
+        MinDamage = 0,
+        MaxDamage = 0,
+        MinRange = 0.0,
+        MaxRange = 1.0,
+        MaxHitCount = 1,
+        ConditionMax = 10,
+        ConditionLowerChanceOneIn = 1000,
+    }
+}

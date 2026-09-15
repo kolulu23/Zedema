@@ -1,0 +1,2 @@
+# The common/ folder is mandatory for Build 42 mods to be detected. Keep it even
+# when it holds no assets; this mod ships only Lua, scripts and one texture.

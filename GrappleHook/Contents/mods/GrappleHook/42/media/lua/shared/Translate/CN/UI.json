@@ -1,0 +1,18 @@
+{
+    "UI_GH_Ready": "发射抓钩",
+    "UI_GH_WillBreak": "发射抓钩（会打碎窗户）",
+    "UI_GH_NoWindow": "此处没有窗户",
+    "UI_GH_Barricaded": "窗户装有路障",
+    "UI_GH_HasRope": "此处已系有绳索",
+    "UI_GH_NoDrop": "下方没有可供绳索垂下的空间",
+    "UI_GH_WrongFloor": "窗户不在上方楼层",
+    "UI_GH_TooFar": "窗户距离太远",
+    "UI_GH_NeedRopes": "绳索数量不足",
+    "UI_GH_OutOfSight": "窗户不在视线内",
+    "UI_GH_Unbreakable": "该窗户无法打碎",
+    "UI_GH_BreakDisabled": "窗户关闭（已禁用破窗）",
+    "UI_GH_Invalid": "目标无效",
+    "UI_GH_RopeCost": "%1 根绳索",
+    "UI_GH_Attached": "绳索已系好",
+    "UI_GH_AttachFailed": "无法系上绳索"
+}

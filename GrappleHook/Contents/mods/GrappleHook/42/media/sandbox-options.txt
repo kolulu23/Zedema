@@ -1,0 +1,42 @@
+VERSION = 1,
+
+option GrappleHook.MaxFloors {
+    type = integer,
+    min = 1,
+    max = 3,
+    default = 2,
+    page = GrappleHook,
+    translation = GrappleHook_MaxFloors,
+},
+
+option GrappleHook.MaxRange {
+    type = double,
+    min = 2.0,
+    max = 12.0,
+    default = 6.0,
+    page = GrappleHook,
+    translation = GrappleHook_MaxRange,
+},
+
+option GrappleHook.BreakWindows {
+    type = boolean,
+    default = true,
+    page = GrappleHook,
+    translation = GrappleHook_BreakWindows,
+},
+
+option GrappleHook.NoiseRadius {
+    type = integer,
+    min = 0,
+    max = 60,
+    default = 15,
+    page = GrappleHook,
+    translation = GrappleHook_NoiseRadius,
+},
+
+option GrappleHook.Debug {
+    type = boolean,
+    default = false,
+    page = GrappleHook,
+    translation = GrappleHook_Debug,
+},
