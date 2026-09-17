@@ -323,7 +323,6 @@
   "so clearing storage, hand-editing it or upgrading the app can never wedge the UI.": "因此清空存储、手动编辑配置或升级应用不会导致界面无法使用。",
   "To start over, press <b>Restore defaults</b> at the bottom of the View controls, or run ": "要重新开始，请点击视图控制底部的<b>恢复默认设置</b>，或在控制台中运行 ",
   "<code>zombieAtlas.store.resetSettings()</code> in the console. Remove the URL hash as well if a bookmark is re-applying filters.": "<code>zombieAtlas.store.resetSettings()</code>。如果书签重新应用了筛选条件，还需要移除 URL 的片段。",
-  "<code>tools/extract.mjs</code> lexes every <code>.java</code> file (comments, strings and text blocks masked), extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>public/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner.": "<code>tools/extract.mjs</code> 对每个 <code>.java</code> 文件进行词法分析（屏蔽注释、字符串和文本块），提取包、类型、成员、Javadoc、注解和引用关系图，将 JSON 数据写入 <code>public/data/</code>。<code>tools/validate.mjs</code> 使用独立扫描器对照原始源码复核结果。",
   "Root / engine singletons": "根包 / 引擎单例",
   "AI & NPC behaviour": "AI 与 NPC 行为",
   "Asset loading": "资源加载",
@@ -395,5 +394,19 @@
   "event": "事件",
   "debug": "调试",
   "abstract": "抽象类",
-  "interfaces": "接口"
+  "interfaces": "接口",
+  "References": "引用",
+  "loading references…": "正在加载引用…",
+  "{0}% resolved": "已解析 {0}%",
+  "{0} ({1})": "{0}（{1}）",
+  "… and {0} more": "… 另有 {0} 项",
+  "Calls": "调用",
+  "Reads": "读取",
+  "Writes": "写入",
+  "Used by ({0} members)": "被引用（{0} 个成员）",
+  "no resolved references": "没有已解析的引用",
+  "{0} sites in this tree resolved to a class only, {1} not at all — receivers that cannot be typed are counted, never guessed.": "本树中有 {0} 处只解析到类，{1} 处完全未解析——无法确定类型的接收者会被计数，绝不去猜。",
+  "line {0}": "第 {0} 行",
+  "references: {0} outgoing, {1} incoming": "引用：{0} 条出向，{1} 条入向",
+  "<code>tools/extract.mjs</code> parses every <code>.java</code> file with the tree-sitter grammar and extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>dist/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner.": "<code>tools/extract.mjs</code> 用 tree-sitter 语法解析每个 <code>.java</code> 文件，提取包、类型、成员、javadoc、注解与引用图，然后写入 <code>dist/data/</code> 中的 JSON 包。<code>tools/validate.mjs</code> 用独立扫描器对照原始源码重新校验结果。"
 }

@@ -72,6 +72,7 @@ Extra flags accepted by `tools/build.mjs`:
 | `--skip-data` | Reuse the existing `dist/data/` bundle (UI-only rebuild, ~0.2 s).    |
 | `--src <dir>` | Decompile tree to read (overrides `ZOMBIE_SRC`).                     |
 | `--pretty`    | Indent the emitted JSON (larger, easier to diff by hand).            |
+| `--no-refs`   | Skip the fine-grained reference layer (`refs/**`, ~13 MB).            |
 
 ### Pointing at your source tree
 
@@ -216,7 +217,11 @@ Twelve cards computed at extraction time and served from `insights.json`.
 - **Most complex methods** (togglable between complexity, branch count and body lines), **Largest types**, **Most depended-upon (fan-in)**, **Biggest reusers (fan-out)**, **Highest branch density**, **Most annotated methods** (the largest `@UsedFromLua` surface per type) and **Strongest package coupling** — each ranking row selects the type (or jumps to the package pair in the Dependencies view).
 - Histograms of declaration kinds, stereotypes, annotations and largest packages, plus a **Scale** card listing the bundle's headline counts.
 
-The right-hand **inspector** is shared by every view: it shows the project overview when nothing is selected, and for a type it lists the badges (kind, Lua API status), metrics, the internal superclass chain, direct subtypes, the full member list with a filter, and the "depends on" / "used by" neighbours, with buttons to open the source, show the type in the hierarchy or copy the fully-qualified name. For a package it shows the package metrics, its sub-packages, and the types it declares (largest first, capped at 60) with buttons to zoom the treemap there or clear the filters.
+The right-hand **inspector** is shared by every view: it shows the project overview when nothing is selected, and for a type it lists the badges (kind, Lua API status), metrics, the internal superclass chain, direct subtypes, the full member list with a filter, and the "depends on" / "used by" neighbours, with buttons to open the source, show the type in the hierarchy or copy the fully-qualified name.
+
+When the bundle carries the reference layer, the inspector adds a **References** section for the selected type and a `→n ←n` badge on each member row. The section lists what the type's members call, read and write (with counts and the first source line, each row jumping to the target type), then which members are referenced most and by whom. It also publishes its own confidence — the share of sites that resolved to a member — and states how many sites resolved to a class only or not at all, because a receiver the analysis cannot type is counted rather than guessed. A bundle built with `--no-refs` shows none of this and behaves exactly as before.
+
+For a package the inspector shows the package metrics, its sub-packages, and the types it declares (largest first, capped at 60) with buttons to zoom the treemap there or clear the filters.
 
 ## Customising the map
 
@@ -321,9 +326,12 @@ the current build and drift slightly with each regeneration.
 | `deps-packages.json`  | ~202 KB                   | 4,096 `[from, to, weight]` package edges, heaviest first.                                                                                                                                                                                            |
 | `deps-classes.json`   | ~408 KB                   | Class-to-class edges, loaded lazily when a class-level edge list is requested.                                                                                                                                                                       |
 | `insights.json`       | ~41 KB                    | Top methods by complexity (with body line and branch counts), the rankings, the histograms and the package-coupling table.                                                                                                                           |
-| `members/<slug>.json` | 266 shards, ~9.7 MB total | Per-package member lists keyed by class id (methods with parameters, throws, modifiers, annotations, line, complexity, body lines and javadoc, plus fields and enum constants). Loaded on demand; the slug is the package with `.` replaced by `__`. |
+| `members/<slug>.json` | 266 shards, ~10 MB total | Per-package member lists keyed by class id (methods with parameters, throws, modifiers, annotations, line, complexity, body lines and javadoc, plus fields and enum constants). Loaded on demand; the slug is the package with `.` replaced by `__`. |
+| `refs/meta.json` | ~1 KB | The reference layer's counts and resolution report: sites by kind, resolved / class-only / unresolved, receiver shapes, row and shard totals. Its absence is how the app knows the bundle was built with `--no-refs`. |
+| `refs/summary.json` | ~230 KB | Per-class aggregates `[id, outCalls, inCalls, outReads, inReads, outWrites, inWrites]` plus the rankings the insights cards read (most-called members, most-written fields, …). |
+| `refs/<slug>.json` | 263 shards, ~13 MB total | Per-member rows: for each member, what it calls/reads/writes (`out`) and who calls/reads/writes it (`in`) as `[classId, line, kind, count, [lines]]`, where kind is `call`/`read`/`write`/`new` and `line` is `-1` when only the class could be resolved. Sharded and loaded exactly like the member lists. |
 
-The bundle is about 11.5 MB in total: roughly 1.7 MB of JSON loaded eagerly and 9.7 MB of member shards fetched on demand.
+The bundle is about 25 MB in total: roughly 1.9 MB of JSON loaded eagerly and 23 MB of shards fetched on demand (member lists plus the reference layer). The reference shards are an order of magnitude more rows than the class graph — 454,692 member-to-member edges from 2.5 M sites — so they are the reason `npm run data -- --no-refs` exists: it writes the bundle without `refs/**` (12 MB) and every reference surface simply hides itself.
 
 ## Validation
 

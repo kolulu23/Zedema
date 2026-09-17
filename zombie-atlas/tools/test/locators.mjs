@@ -162,6 +162,10 @@ export const inspectorBadges = (page) => page.locator(`${sel.inspectorBody} .bad
 export const metricKeys = (page) => page.locator(`${sel.inspectorBody} .kv dt`);
 /** One row per member in the filterable members list. */
 export const memberRows = (page) => page.locator(`${sel.inspectorBody} .member-list .member`);
+/** The inspector's References section — present only when the bundle has the reference layer. */
+export const refsSection = (page) => page.locator(`${sel.inspectorBody} [data-refs="section"]`);
+/** Rows inside the References section (one per referenced member). */
+export const refsRows = (page) => page.locator(`${sel.inspectorBody} [data-refs="row"]`);
 
 /* ---------------------------------------------------------------- modal -- */
 

@@ -1181,7 +1181,7 @@ function openHelp() {
     h('h3', { text: msg("Data pipeline") }),
     h('p', {
       html:
-        msg("<code>tools/extract.mjs</code> lexes every <code>.java</code> file (comments, strings and text blocks masked), extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>public/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner."),
+        msg("<code>tools/extract.mjs</code> parses every <code>.java</code> file with the tree-sitter grammar and extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>dist/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner."),
     }),
     h(
       'div',

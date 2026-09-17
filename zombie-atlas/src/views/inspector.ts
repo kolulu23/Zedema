@@ -11,9 +11,14 @@ import {
   type Atlas,
   type ClassRec,
   type MemberRec,
+  type MemberRefs,
   type PkgNode,
+  type RefRow,
+  REF_KIND_LABEL,
   loadMembers,
   loadClassDeps,
+  loadRefMeta,
+  loadRefShard,
   ancestryOf,
   descendantsOf,
   KIND_NAMES,
@@ -29,6 +34,10 @@ let deps: { out: Map<number, { id: number; w: number }[]>; in: Map<number, { id:
 let depsLoading = false;
 let memberCache = new Map<number, MemberRec[]>();
 let memberFilter = '';
+/** package -> per-class, per-member reference rows (loaded on demand) */
+const refShards = new Map<string, Map<number, Map<number, MemberRefs>>>();
+let refState: 'unknown' | 'loading' | 'ready' | 'absent' = 'unknown';
+let refCounts: { sites: number; resolved: number; classOnly: number; unresolved: number } | null = null;
 
 export function initInspector(a: Atlas) {
   atlas = a;
@@ -63,6 +72,43 @@ function push<T>(m: Map<number, T[]>, k: number, v: T) {
 }
 
 let memberLoadInFlight: number | null = null;
+let refLoadInFlight: string | null = null;
+
+/**
+ * References arrive per package, like member lists. The index is probed once;
+ * a bundle built with `--no-refs` simply never has them, and every surface
+ * below renders nothing extra in that case.
+ */
+async function ensureRefs(pkg: string) {
+  if (refState === 'absent' || refShards.has(pkg) || refLoadInFlight === pkg) return;
+  refLoadInFlight = pkg;
+  try {
+    if (refState === 'unknown') {
+      refState = 'loading';
+      refCounts = await loadRefMeta('data');
+      refState = refCounts ? 'ready' : 'absent';
+      if (!refCounts) {
+        render(store.state);
+        return;
+      }
+    }
+    refShards.set(pkg, await loadRefShard('data', pkg));
+  } catch {
+    /* shard missing: the panel shows the plain member list */
+  } finally {
+    refLoadInFlight = null;
+    render(store.state);
+  }
+}
+
+function refsFor(c: ClassRec): Map<number, MemberRefs> | null {
+  return refShards.get(c.pkg)?.get(c.id) ?? null;
+}
+
+/** Total incoming rows for one member, by kind. */
+function incoming(refs: Map<number, MemberRefs> | null, line: number): RefRow[] {
+  return refs?.get(line)?.in ?? [];
+}
 
 async function ensureMembersFor(classId: number) {
   if (!atlas || memberLoadInFlight === classId) return;
@@ -130,6 +176,7 @@ export function render(state: AppState) {
     // Members are sharded per package: fetch the shard for whatever is selected
     // (treemap click, search hit, hierarchy node, insight row — all of them).
     if (!memberCache.has(classId)) void ensureMembersFor(classId);
+    void ensureRefs(atlas.byId[classId].pkg);
     body.replaceChildren(classPanel(atlas.byId[classId]));
     ensureDeps();
   } else if (packagePath && atlas.pkgByPath.get(packagePath)) {
@@ -268,7 +315,15 @@ function classPanel(c: ClassRec): HTMLElement {
     }
     if (!shown.length) memSection.append(h('div', { class: 'empty', text: msg("No members match the filter") }));
   }
+  refBadges = new Map();
+  const classRefs = refsFor(c);
+  if (classRefs) {
+    for (const [line, m] of classRefs) refBadges.set(line, { outTotal: totalRows(m.out), inTotal: totalRows(m.in) });
+  }
   wrap.append(memSection);
+
+  const refsEl = refsSection(c, classRefs);
+  if (refsEl) wrap.append(refsEl);
 
   // ---- coupling
   if (deps) {
@@ -297,6 +352,124 @@ function classPanel(c: ClassRec): HTMLElement {
   return wrap;
 }
 
+/** Badge totals for the member rows of the type currently rendered. */
+let refBadges = new Map<number, { outTotal: number; inTotal: number }>();
+
+function totalRows(rows: RefRow[] | null | undefined): number {
+  return (rows ?? []).reduce((a, r) => a + r[3], 0);
+}
+
+/**
+ * The References section: what this type's members call and touch (outgoing),
+ * what touches them (incoming), and how much of it resolved.
+ */
+function refsSection(c: ClassRec, refs: Map<number, MemberRefs> | null): HTMLElement | null {
+  if (refState !== 'ready') return null;
+  if (!refs) {
+    return section(msg("References"), h('div', { class: 'empty', text: msg("loading references…") }));
+  }
+
+  const outRows = new Map<RefRow['2'] /* kind */, Map<string, RefRow>>();
+  const inRows = new Map<number, Map<string, RefRow>>();
+  const push = (map: Map<number, Map<string, RefRow>>, key: number, row: RefRow) => {
+    let inner = map.get(key);
+    if (!inner) map.set(key, (inner = new Map()));
+    const id = `${row[0]}:${row[1]}:${row[2]}`;
+    const prev = inner.get(id);
+    if (prev) prev[3] += row[3];
+    else inner.set(id, [...row] as RefRow);
+  };
+  for (const m of refs.values()) {
+    for (const r of m.out ?? []) push(outRows as never, r[2], r);
+    for (const r of m.in ?? []) push(inRows, m.line, r);
+  }
+
+  const totals = [...refs.values()].reduce(
+    (acc, m) => {
+      acc.out += totalRows(m.out);
+      acc.in += totalRows(m.in);
+      return acc;
+    },
+    { out: 0, in: 0 }
+  );
+  const confidence = refCounts && refCounts.sites ? Math.round((refCounts.resolved / refCounts.sites) * 100) : null;
+  const header = h('h3', {}, msg("References"),
+    h('span', { class: 'count', text: `→${totals.out} ←${totals.in}` }),
+    confidence !== null ? h('span', { class: 'badge', style: { marginLeft: 'auto' }, text: msg("{0}% resolved", confidence) }) : null
+  );
+  // `data-refs` is the language-neutral hook the test suite locates by
+  const wrap = h('div', { class: 'insp-section', 'data-refs': 'section' }, header);
+
+  const group = (kind: number, label: string, limit = 12) => {
+    const rows = [...(outRows.get(kind as never)?.values() ?? [])].sort((a, b) => b[3] - a[3]);
+    if (!rows.length) return;
+    wrap.append(h('h3', { style: { marginTop: '8px' }, text: msg("{0} ({1})", label, rows.length) }));
+    const list = h('div', { class: 'link-list' });
+    for (const r of rows.slice(0, limit)) {
+      const target = atlas!.byId[r[0]];
+      if (!target) continue;
+      const member = (memberCache.get(r[0]) ?? []).find((mm) => mm.line === r[1]);
+      list.append(refRow(target, member, r, 'out'));
+    }
+    if (rows.length > limit) list.append(h('div', { class: 'empty', text: msg("… and {0} more", rows.length - limit) }));
+    wrap.append(list);
+  };
+  group(0, msg("Calls"));
+  group(1, msg("Reads"));
+  group(2, msg("Writes"));
+
+  // incoming, by the members of this type that are referenced
+  const busiest = [...inRows.entries()].sort((a, b) => totalRows([...b[1].values()]) - totalRows([...a[1].values()])).slice(0, 10);
+  if (busiest.length) {
+    wrap.append(h('h3', { style: { marginTop: '8px' }, text: msg("Used by ({0} members)", inRows.size) }));
+    const list = h('div', { class: 'link-list' });
+    for (const [line, rows] of busiest) {
+      const member = (memberCache.get(c.id) ?? []).find((mm) => mm.line === line);
+      const top = [...rows.values()].sort((a, b) => b[3] - a[3]);
+      for (const r of top.slice(0, 4)) {
+        const caller = atlas!.byId[r[0]];
+        if (!caller) continue;
+        list.append(
+          h(
+            'div',
+            { class: 'link', 'data-act': 'class', 'data-id': caller.id, 'data-refs': 'row', title: caller.fqn },
+            h('span', { class: 'kinddot', style: { background: 'var(--accent-2)', opacity: '0.8' } }),
+            h('span', { class: 'nm', text: `${caller.name}.${member?.name ?? '?'}` }),
+            h('span', { class: 'sub', text: `${REF_KIND_LABEL[r[2]]} ${member?.name ?? ''} ×${r[3]}` })
+          )
+        );
+      }
+    }
+    wrap.append(list);
+  }
+
+  if (!totals.out && !totals.in) {
+    wrap.append(h('div', { class: 'empty', text: msg("no resolved references") }));
+  }
+  if (refCounts && refCounts.unresolved) {
+    wrap.append(
+      h('div', {
+        class: 'empty',
+        style: { marginTop: '6px' },
+        text: msg("{0} sites in this tree resolved to a class only, {1} not at all — receivers that cannot be typed are counted, never guessed.", refCounts.classOnly, refCounts.unresolved),
+      })
+    );
+  }
+  return wrap;
+}
+
+/** One row of the references list: target type, member, count and first line. */
+function refRow(target: ClassRec, member: MemberRec | undefined, row: RefRow, dir: 'in' | 'out'): HTMLElement {
+  return h(
+    'div',
+    { class: 'link', 'data-act': 'class', 'data-id': target.id, title: `${target.fqn}${row[4]?.length ? `
+${msg("line {0}", row[4].join(', '))}` : ''}` },
+    h('span', { class: 'kinddot', style: { background: `var(--accent${dir === 'out' ? '' : '-2'})`, opacity: '0.8' } }),
+    h('span', { class: 'nm', text: member ? `${target.name}.${member.name}` : target.name }),
+    h('span', { class: 'sub', text: `×${row[3]}${row[4]?.length ? ` · ${msg("line {0}", row[4][0])}` : ''}` })
+  );
+}
+
 function memberRow(m: MemberRec): HTMLElement {
   const lua = m.annotations.includes('UsedFromLua');
   const sig = h('span', { class: 'sig' });
@@ -313,6 +486,20 @@ function memberRow(m: MemberRec): HTMLElement {
   const badges = h('span', { style: { display: 'flex', gap: '4px' } });
   if (m.complexity > 12) badges.append(h('span', { class: 'badge cx', text: msg("cx {0}", m.complexity) }));
   if (lua) badges.append(h('span', { class: 'badge lua', text: msg("lua") }));
+  const refs = refBadges.get(m.line);
+  if (refs) {
+    const out = refs.outTotal;
+    const inc = refs.inTotal;
+    if (out || inc) {
+      badges.append(
+        h('span', {
+          class: 'badge refs',
+          title: msg("references: {0} outgoing, {1} incoming", out, inc),
+          text: `${out ? `→${out}` : ''}${out && inc ? ' ' : ''}${inc ? `←${inc}` : ''}`,
+        })
+      );
+    }
+  }
   const row = h('div', { class: `member${lua ? ' lua' : ''}`, title: msg("{0} · line {1}{2}", m.modifiers, m.line, m.doc ? `\n\n${m.doc}` : '') }, sig, badges);
   return row;
 }

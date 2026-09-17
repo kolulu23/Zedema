@@ -323,7 +323,6 @@
   "so clearing storage, hand-editing it or upgrading the app can never wedge the UI.": "so clearing storage, hand-editing it or upgrading the app can never wedge the UI.",
   "To start over, press <b>Restore defaults</b> at the bottom of the View controls, or run ": "To start over, press <b>Restore defaults</b> at the bottom of the View controls, or run ",
   "<code>zombieAtlas.store.resetSettings()</code> in the console. Remove the URL hash as well if a bookmark is re-applying filters.": "<code>zombieAtlas.store.resetSettings()</code> in the console. Remove the URL hash as well if a bookmark is re-applying filters.",
-  "<code>tools/extract.mjs</code> lexes every <code>.java</code> file (comments, strings and text blocks masked), extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>public/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner.": "<code>tools/extract.mjs</code> lexes every <code>.java</code> file (comments, strings and text blocks masked), extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>public/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner.",
   "Root / engine singletons": "Root / engine singletons",
   "AI & NPC behaviour": "AI & NPC behaviour",
   "Asset loading": "Asset loading",
@@ -395,5 +394,19 @@
   "event": "event",
   "debug": "debug",
   "abstract": "abstract",
-  "interfaces": "interfaces"
+  "interfaces": "interfaces",
+  "References": "References",
+  "loading references…": "loading references…",
+  "{0}% resolved": "{0}% resolved",
+  "{0} ({1})": "{0} ({1})",
+  "… and {0} more": "… and {0} more",
+  "Calls": "Calls",
+  "Reads": "Reads",
+  "Writes": "Writes",
+  "Used by ({0} members)": "Used by ({0} members)",
+  "no resolved references": "no resolved references",
+  "{0} sites in this tree resolved to a class only, {1} not at all — receivers that cannot be typed are counted, never guessed.": "{0} sites in this tree resolved to a class only, {1} not at all — receivers that cannot be typed are counted, never guessed.",
+  "line {0}": "line {0}",
+  "references: {0} outgoing, {1} incoming": "references: {0} outgoing, {1} incoming",
+  "<code>tools/extract.mjs</code> parses every <code>.java</code> file with the tree-sitter grammar and extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>dist/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner.": "<code>tools/extract.mjs</code> parses every <code>.java</code> file with the tree-sitter grammar and extracts packages, types, members, javadoc, annotations and the reference graph, then writes the JSON bundle in <code>dist/data/</code>. <code>tools/validate.mjs</code> re-checks the result against the raw source with an independent scanner."
 }
