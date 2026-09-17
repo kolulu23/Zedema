@@ -9,7 +9,7 @@ import { msg } from '../../i18n';
 
 import type { ClassRec } from '../../domain';
 import { h } from '../../util';
-import { highlight } from './highlight';
+import { highlightSource } from './grammar-highlight';
 
 let modalRoot: HTMLElement | null = null;
 
@@ -45,12 +45,15 @@ export async function openSource(c: ClassRec) {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const text = await res.text();
     const lines = text.split('\n');
+    // The grammar colours the whole file in one pass, so the window the viewer
+    // shows always agrees with how the extractor read the file.
+    const coloured = await highlightSource(text);
     const rows: string[] = [];
     const from = Math.max(1, c.declLine - 40);
     const to = Math.min(lines.length, c.declLine + 260);
     for (let i = from; i <= to; i++) {
       const hl = Math.abs(i - c.declLine) < 1 ? ' class="hl"' : '';
-      rows.push(`<tr${hl}><td class="ln">${i}</td><td>${highlight(lines[i - 1] ?? '')}</td></tr>`);
+      rows.push(`<tr${hl}><td class="ln">${i}</td><td>${coloured[i - 1] ?? ''}</td></tr>`);
     }
     body.replaceChildren(
       h('table', {

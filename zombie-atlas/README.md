@@ -215,6 +215,17 @@ Twelve cards computed at extraction time and served from `insights.json`.
 - **Most complex methods** (togglable between complexity, branch count and body lines), **Largest types**, **Most depended-upon (fan-in)**, **Biggest reusers (fan-out)**, **Highest branch density**, **Most annotated methods** (the largest `@UsedFromLua` surface per type) and **Strongest package coupling** — each ranking row selects the type (or jumps to the package pair in the Dependencies view).
 - Histograms of declaration kinds, stereotypes, annotations and largest packages, plus a **Scale** card listing the bundle's headline counts.
 
+**The source viewer colourises with the grammar.** Opening a file parses it with
+the same `tree-sitter-java` grammar that extracted the bundle, so comments and
+literals can never be mistaken for code and an unknown construct is visibly
+uncoloured rather than silently wrong. That parser is a lazy chunk: `web-tree-
+sitter` and the grammar's 415 KB `.wasm` are fetched the first time a viewer
+opens, never at startup, and one file is parsed per open (~1 ms), so it runs on
+the main thread. If the asset cannot be fetched the viewer falls back to plain
+escaped text. The runtime and grammar wasm are emitted by the
+`zombie-atlas-parser-assets` plugin in `vite.config.ts` (grammar under `/ts/`,
+the runtime next to the chunk that loads it).
+
 The right-hand **inspector** is shared by every view: it shows the project overview when nothing is selected, and for a type it lists the badges (kind, Lua API status), metrics, the internal superclass chain, direct subtypes, the full member list with a filter, and the "depends on" / "used by" neighbours, with buttons to open the source, show the type in the hierarchy or copy the fully-qualified name.
 
 When the bundle carries the reference layer, the inspector adds a **References** section for the selected type and a `→n ←n` badge on each member row. The section lists what the type's members call, read and write (with counts and the first source line, each row jumping to the target type), then which members are referenced most and by whom. It also publishes its own confidence — the share of sites that resolved to a member — and states how many sites resolved to a class only or not at all, because a receiver the analysis cannot type is counted rather than guessed. A bundle built with `--no-refs` shows none of this and behaves exactly as before.
@@ -451,7 +462,7 @@ zombie-atlas/
       index.ts            Barrel — the rest of the app imports `./state`
     styles.css            Themes and layout
     views/
-      source/             Source-viewer modal + the Java highlighter (pure, tested)
+      source/             Source-viewer modal + the grammar-driven highlighter
       treemap.ts          Canvas treemap, zoom, labels, tooltip, exports
       hierarchy.ts        Inheritance forest
       dependencies.ts     Force graph, adjacency matrix, class-edge list
@@ -507,7 +518,8 @@ node tools/extract.mjs --pretty                  # indented JSON for diffing
 ```
 
 - Node.js with npm is the only build requirement; the pipeline is plain Node ESM
-  and the app has no runtime dependencies beyond the bundled `d3-*` packages.
+  and the app's own dependencies are the bundled `d3-*` packages plus the parser
+  the source viewer uses (see below).
 - The extractor has exactly two parser dependencies: `tree-sitter-java` (MIT)
   and `web-tree-sitter`. The grammar is consumed as the `.wasm` file the
   package ships, its native peer is optional, and no install script needs to run

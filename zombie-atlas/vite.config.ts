@@ -2,6 +2,7 @@ import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import solid from 'vite-plugin-solid';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 // @ts-expect-error - plain JS helper shared with the CLI tools
 import { DEFAULT_DATA_DIR, resolveSourceDir } from './tools/lib/config.mjs';
 
@@ -12,6 +13,59 @@ const MIME: Record<string, string> = {
 };
 
 const flag = (name: string) => process.env[name] === '1' || process.env[name] === 'true';
+
+const require = createRequire(import.meta.url);
+
+/** Locate a dependency's package root (its entry may be behind an exports map). */
+function packageRoot(specifier: string): string {
+  let dir = path.dirname(require.resolve(specifier));
+  for (;;) {
+    const file = path.join(dir, 'package.json');
+    if (fs.existsSync(file)) {
+      const pkg = JSON.parse(fs.readFileSync(file, 'utf8')) as { name: string };
+      if (pkg.name === specifier || specifier.startsWith(`${pkg.name}/`)) return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) throw new Error(`cannot locate ${specifier}`);
+    dir = parent;
+  }
+}
+
+/**
+ * Serve the parser runtime and the Java grammar to the browser.
+ *
+ * The source viewer colourises a file with the same grammar that extracted the
+ * bundle, in a lazy chunk: these two files are fetched the first time a viewer
+ * opens, and nothing else in the app depends on them.
+ */
+function parserAssetsPlugin(): Plugin {
+  // Only the grammar: the runtime is bundled by Vite, which already emits its
+  // wasm next to the chunk and lets `Parser.init()` find it.
+  const assets = (): { name: string; file: string }[] => [
+    { name: 'tree-sitter-java.wasm', file: path.join(packageRoot('tree-sitter-java'), 'tree-sitter-java.wasm') },
+  ];
+  return {
+    name: 'zombie-atlas-parser-assets',
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use((req, res, next) => {
+        const url = (req.url ?? '').split('?')[0];
+        if (!url.startsWith('/ts/')) return next();
+        const asset = assets().find((a) => url === `/ts/${a.name}`);
+        if (!asset) {
+          res.statusCode = 404;
+          return res.end('not found');
+        }
+        res.setHeader('content-type', 'application/wasm');
+        fs.createReadStream(asset.file).pipe(res);
+      });
+    },
+    generateBundle() {
+      for (const asset of assets()) {
+        this.emitFile({ type: 'asset', fileName: `ts/${asset.name}`, source: fs.readFileSync(asset.file) });
+      }
+    },
+  };
+}
 
 /**
  * Owns the generated JSON bundle.
@@ -174,7 +228,7 @@ export default defineConfig({
   // Nothing is copied into dist/: the app is bundled and the data is written
   // into dist/data by the plugin above.
   publicDir: false,
-  plugins: [solid(), atlasDataPlugin()],
+  plugins: [solid(), atlasDataPlugin(), parserAssetsPlugin()],
   build: {
     target: 'es2022',
     outDir: 'dist',

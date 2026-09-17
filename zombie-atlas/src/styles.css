@@ -438,3 +438,14 @@ kbd {
   :root { --sidebar-w: 232px; --inspector-w: 330px; }
   .search { width: 210px; }
 }
+
+/* Grammar-derived syntax colours: one distinct hue per token class, so the
+   source viewer reads like Java rather than like highlighted text. */
+.src-code .tk-kw { color: var(--accent-2); }
+.src-code .tk-typ { color: var(--accent); }
+.src-code .tk-fn { color: var(--lua); }
+.src-code .tk-str { color: var(--warn); }
+.src-code .tk-num { color: var(--danger); }
+.src-code .tk-lit { color: var(--danger); }
+.src-code .tk-ann { color: var(--lua); }
+.src-code .tk-com { color: var(--fg-2); font-style: italic; }
