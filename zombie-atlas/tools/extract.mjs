@@ -16,20 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCommonArgs, resolveDataOut, resolveSourceDir } from './lib/config.mjs';
 import { initJavaParser, parseJavaFileWith } from './lib/java-ast.mjs';
-import {
-  maskSource,
-  braceDepth,
-  lineIndex,
-  lineOf,
-  splitTopLevel,
-  splitAnnotations,
-  splitModifiers,
-  stripTypeParams,
-  readType,
-  readSupertypes,
-  normalizeTypeRef,
-  simpleName,
-} from './lib/java-lexer.mjs';
+import { normalizeTypeRef, simpleName } from './lib/java-names.mjs';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -41,19 +28,16 @@ let PRETTY = argv.includes("--pretty");
 let QUIET = argv.includes('--quiet');
 const { src: cliSrc, out: cliOut } = parseCommonArgs(argv);
 
-/**
- * Which parser builds the records.
- *
- *   `ast`   — the tree-sitter grammar (`tools/lib/java-ast.mjs`): the shipped default
- *   `regex` — the original mask/brace-depth scanner, kept as an escape hatch
- *
- * `tools/parity.mjs` runs both over the same tree and is the gate for changes here.
- */
-const PARSER_FLAG = (() => {
+// `--parser` used to switch between the tree-sitter extractor and the original
+// regex scanner. The scanner is gone; the flag is accepted (and ignored) so an
+// old command line fails loudly instead of quietly doing something else.
+const LEGACY_PARSER_ARG = (() => {
   const i = argv.indexOf('--parser');
-  return (i >= 0 ? argv[i + 1] : undefined) ?? process.env.ZOMBIE_ATLAS_PARSER ?? 'ast';
+  return i >= 0 ? argv[i + 1] : undefined;
 })();
-let USE_AST = PARSER_FLAG !== 'regex';
+if (LEGACY_PARSER_ARG && LEGACY_PARSER_ARG !== 'ast' && LEGACY_PARSER_ARG !== 'tree-sitter') {
+  process.stderr.write(`[extract] the "${LEGACY_PARSER_ARG}" parser was removed; using tree-sitter\n`);
+}
 /** Ast extraction options: the canonical branch-node set (see docs/parser-parity.md). */
 const AST_OPTIONS = { excludeDefaultLabels: true };
 
@@ -85,478 +69,6 @@ function walk(dir) {
     }
   }
   return out.sort();
-}
-
-// ---------------------------------------------------------------------------
-// per-file parsing
-// ---------------------------------------------------------------------------
-
-const TYPE_KEYWORD = /(?:^|[^\w$.])(?:@interface|class|interface|enum|record)\s+[A-Za-z_$][\w$]*/g;
-const DECL_RE = /(@interface|class|interface|enum|record)\s+([A-Za-z_$][\w$]*)/;
-
-const BRANCH_RE = /\b(?:if|for|while|case|catch)\b|&&|\|\||\?(?![?.])/g;
-
-/**
- * Parse one Java source file into zero or more type records.
- * @param {string} absPath
- * @returns {{types: any[], file: any}}
- */
-export function parseFile(absPath) {
-  const src = fs.readFileSync(absPath, 'utf8');
-  const rel = `${MOUNT()}/${path.relative(SRC_DIR(), absPath).split(path.sep).join('/')}`;
-  const { masked, comments } = maskSource(src);
-  const depth = braceDepth(masked);
-  const lineStarts = lineIndex(src);
-
-  const pkgMatch = /(?:^|\n)\s*package\s+([\w.]+)\s*;/.exec(masked);
-  const pkg = pkgMatch ? pkgMatch[1] : '(default)';
-
-  // ---- imports ------------------------------------------------------------
-  const imports = [];
-  const importRe = /(?:^|\n)\s*import\s+(static\s+)?([\w.$*]+)\s*;/g;
-  let im;
-  while ((im = importRe.exec(masked))) {
-    imports.push({ static: !!im[1], name: im[2] });
-  }
-
-  // ---- file level line accounting ----------------------------------------
-  // Prefix sums let every (possibly nested) type be charged exactly its own
-  // line span, so package totals never double count a nested class.
-  const lines = src.split('\n');
-  const maskedLines = masked.split('\n');
-  const nLines = lines.length;
-  const cumBlank = new Int32Array(nLines + 1);
-  const cumComment = new Int32Array(nLines + 1);
-  for (let i = 0; i < nLines; i++) {
-    const isBlank = !lines[i].trim();
-    const isComment = !isBlank && !maskedLines[i].trim();
-    cumBlank[i + 1] = cumBlank[i] + (isBlank ? 1 : 0);
-    cumComment[i + 1] = cumComment[i] + (isComment ? 1 : 0);
-  }
-  /** Line stats for an inclusive 1-based line range. */
-  const rangeStats = (from, to) => {
-    const lo = Math.max(1, Math.min(from, nLines));
-    const hi = Math.max(lo, Math.min(to, nLines));
-    const total = hi - lo + 1;
-    const bl = cumBlank[hi] - cumBlank[lo - 1];
-    const cm = cumComment[hi] - cumComment[lo - 1];
-    return { loc: total, blank: bl, commentOnly: cm, code: total - bl - cm };
-  };
-  const bytesOfRange = (from, to) => {
-    const lo = Math.max(1, Math.min(from, nLines));
-    const hi = Math.max(lo, Math.min(to, nLines));
-    return Buffer.byteLength(lines.slice(lo - 1, hi).join('\n'), 'utf8');
-  };
-  const blank = cumBlank[nLines];
-  const commentOnly = cumComment[nLines];
-  const loc = nLines;
-  const code = loc - blank - commentOnly;
-
-  // ---- types --------------------------------------------------------------
-  const types = [];
-  const stack = []; // enclosing types by body range
-  TYPE_KEYWORD.lastIndex = 0;
-  let m;
-  while ((m = TYPE_KEYWORD.exec(masked))) {
-    const decl = DECL_RE.exec(masked.slice(m.index));
-    const kwStart = m.index + m[0].indexOf(decl[1]);
-    const nameStart = kwStart + decl[1].length + 1;
-    const nameEnd = nameStart + decl[2].length;
-
-    // Declaration start: back up over annotations and modifiers.
-    let declStart = m.index;
-    {
-      let j = declStart;
-      while (j > 0 && !';{}'.includes(masked[j - 1])) j--;
-      // keep the javadoc/annotation run attached to this declaration
-      const prevEnd = j;
-      while (prevEnd < declStart && /\s/.test(masked[prevEnd])) {
-        // only whitespace between the previous statement and the declaration
-        break;
-      }
-      declStart = j;
-    }
-
-    // Body braces (annotations precede the type name, so scanning forward from
-    // the name is safe).
-    let bodyStart = -1;
-    for (let i = nameEnd; i < masked.length; i++) {
-      const c = masked[i];
-      if (c === '{') {
-        bodyStart = i;
-        break;
-      }
-      if (c === ';') break; // malformed / annotation-array false positive
-    }
-    if (bodyStart < 0) continue;
-    // `depth[i]` counts braces opened *before* i, so the brace that closes this
-    // body is the first `}` seen while sitting one level inside it.
-    const outerDepth = depth[bodyStart];
-    const bodyDepth = outerDepth + 1;
-    let bodyEnd = bodyStart + 1;
-    for (let i = bodyStart + 1; i < masked.length; i++) {
-      if (masked[i] === '}' && depth[i] === bodyDepth) {
-        bodyEnd = i;
-        break;
-      }
-    }
-
-    // Pop finished enclosing types.
-    while (stack.length && stack[stack.length - 1].bodyEnd < bodyStart) stack.pop();
-    const parent = stack.length ? stack[stack.length - 1] : null;
-
-    const header = masked.slice(declStart, bodyStart);
-    const { annotations, rest } = splitAnnotations(header);
-    const { modifiers, rest: afterMods } = splitModifiers(rest);
-    // Drop the `class Name<T>` head so only the heritage clause is inspected.
-    const declHead = afterMods.replace(
-      /^\s*(?:@interface|class|interface|enum|record)\s+[A-Za-z_$][\w$]*/,
-      ''
-    );
-    const supertypes = readSupertypes(stripTypeParams(declHead).rest);
-
-    const firstToken = (() => {
-      const m2 = /[@\w$]/.exec(masked.slice(declStart, bodyStart));
-      return m2 ? declStart + m2.index : declStart;
-    })();
-
-    const rec = {
-      kind: decl[1] === '@interface' ? 'annotation' : decl[1],
-      name: decl[2],
-      fqn: parent ? `${parent.fqn}.${decl[2]}` : pkg === '(default)' ? decl[2] : `${pkg}.${decl[2]}`,
-      package: pkg,
-      parentType: parent ? parent.fqn : null,
-      path: rel,
-      declLine: lineOf(lineStarts, declStart),
-      bodyStart,
-      bodyEnd,
-      modifiers,
-      annotations: annotations.map((a) => a.replace(/^@/, '').split('(')[0]),
-      rawAnnotations: annotations,
-      extends: supertypes.extends,
-      implements: supertypes.implements,
-      permits: supertypes.permits,
-      members: [],
-      enumConstants: [],
-      doc: findDoc(comments, src, firstToken),
-      loc,
-      code,
-      commentOnly,
-      blank,
-      bytes: Buffer.byteLength(src, 'utf8'),
-      fileImports: imports,
-    };
-
-    parseMembers(rec, { src, masked, depth, lineStarts });
-    // Nested types are charged only their own span; the outermost type owns the
-    // whole file (imports, license header, trailing comments included).
-    rec.endLine = lineOf(lineStarts, bodyEnd);
-    if (parent) {
-      const st = rangeStats(rec.declLine, rec.endLine);
-      rec.loc = st.loc;
-      rec.blank = st.blank;
-      rec.commentOnly = st.commentOnly;
-      rec.code = st.code;
-      rec.bytes = bytesOfRange(rec.declLine, rec.endLine);
-    }
-    stack.push(rec);
-    types.push(rec);
-    // Resume just inside the body: nested types must still be discovered.
-    TYPE_KEYWORD.lastIndex = bodyStart + 1;
-  }
-
-  return {
-    types,
-    file: { path: rel, pkg, loc, code, commentOnly, blank, bytes: Buffer.byteLength(src, 'utf8'), imports, typeCount: types.length },
-  };
-}
-
-/** Nearest preceding javadoc block comment, with only whitespace in between. */
-function findDoc(comments, src, declStart) {
-  let best = null;
-  for (const c of comments) {
-    // Only whitespace and annotation lines may sit between doc and declaration.
-    if (c.end <= declStart && /^[\s@\w$.,()\[\]"'\-]*$/.test(src.slice(c.end, declStart))) best = c;
-    if (c.start > declStart) break;
-  }
-  if (!best || !best.doc) return null;
-  return cleanDoc(best.text);
-}
-
-function cleanDoc(text) {
-  return text
-    .replace(/^\/\*\*?/, '')
-    .replace(/\*\/$/, '')
-    .split('\n')
-    .map((l) => l.replace(/^\s*\*\s?/, '').trimEnd())
-    .join('\n')
-    .trim();
-}
-
-/**
- * Walk a type body at member depth and extract fields, constructors, methods,
- * nested-type placeholders and enum constants.
- */
-function parseMembers(rec, ctx) {
-  const { src, masked, depth, lineStarts } = ctx;
-  const bodyDepth = depth[rec.bodyStart] + 1;
-  let i = rec.bodyStart + 1;
-  const end = rec.bodyEnd;
-
-  // --- enum constants ------------------------------------------------------
-  if (rec.kind === 'enum') {
-    let j = i;
-    for (;;) {
-      while (j < end && /[\s,]/.test(masked[j])) j++;
-      if (masked[j] === ';' || masked[j] === '}' || j >= end) break;
-      const constStart = j;
-      // leading annotations on constants
-      while (masked[j] === '@') {
-        j++; // '@'
-        while (j < end && /[\w$.]/.test(masked[j])) j++;
-        if (masked[j] === '(') j = skipBalanced(masked, j, '(', ')');
-        while (j < end && /\s/.test(masked[j])) j++;
-      }
-      while (j < end && /\s/.test(masked[j])) j++;
-      const nm = /^[A-Za-z_$][\w$]*/.exec(masked.slice(j, j + 200));
-      if (!nm) break;
-      const constName = nm[0];
-      j += constName.length;
-      while (j < end && /\s/.test(masked[j])) j++;
-      let argCount = 0;
-      if (masked[j] === '(') {
-        const close = skipBalanced(masked, j, '(', ')');
-        argCount = splitTopLevel(masked.slice(j + 1, close - 1)).length;
-        j = close;
-      }
-      while (j < end && /\s/.test(masked[j])) j++;
-      let hasBody = false;
-      if (masked[j] === '{') {
-        hasBody = true;
-        j = skipBalanced(masked, j, '{', '}');
-      }
-      rec.enumConstants.push({
-        name: constName,
-        argCount,
-        hasBody,
-        line: lineOf(lineStarts, constStart),
-        endLine: lineOf(lineStarts, Math.max(constStart, j - 1)),
-        doc: null,
-      });
-      while (j < end && /\s/.test(masked[j])) j++;
-      if (masked[j] === ',') {
-        j++;
-        continue;
-      }
-      break;
-    }
-    i = j;
-    if (masked[i] === ';') i++;
-  }
-
-  // --- members -------------------------------------------------------------
-  let guard = 0;
-  while (i < end && guard++ < 20000) {
-    // skip whitespace and stray separators
-    while (i < end && /[\s;]/.test(masked[i])) i++;
-    if (i >= end) break;
-
-    const start = i;
-    let j = i;
-    let nested = 0; // (), [], <> nesting for the header
-    let angle = 0;
-    let terminator = -1;
-    let termKind = null;
-    while (j < end) {
-      const c = masked[j];
-      if (c === '(' || c === '[') nested++;
-      else if (c === ')' || c === ']') nested = Math.max(0, nested - 1);
-      else if (c === '<') angle++;
-      else if (c === '>') angle = Math.max(0, angle - 1);
-      else if (nested === 0 && angle === 0 && depth[j] === bodyDepth) {
-        if (c === ';') {
-          terminator = j;
-          termKind = 'semi';
-          break;
-        }
-        if (c === '{') {
-          terminator = j;
-          termKind = 'brace';
-          break;
-        }
-        if (c === '}') {
-          terminator = j;
-          termKind = 'end';
-          break;
-        }
-      }
-      j++;
-    }
-    if (termKind === null || termKind === 'end') break;
-
-    const headerRaw = masked.slice(start, terminator);
-    let memberEnd = terminator;
-    if (termKind === 'brace') {
-      memberEnd = skipBalanced(masked, terminator, '{', '}');
-    }
-
-    // A nested type body: already captured by the type walker, record a stub
-    // only if this is not one (the walker emits nested types separately).
-    const headerTrim = headerRaw.trim();
-    if (headerTrim && !/^static\s*\{$/.test(headerTrim)) {
-      const member = describeMember(headerTrim, rec, src, masked, lineStarts, start, terminator, memberEnd, bodyDepth, depth);
-      if (member) rec.members.push(member);
-    }
-
-    i = memberEnd + (termKind === 'brace' ? 1 : 1);
-  }
-}
-
-/** Skip a balanced pair starting at `open`, returning index just past the close. */
-function skipBalanced(s, openIdx, open, close) {
-  let d = 0;
-  for (let i = openIdx; i < s.length; i++) {
-    if (s[i] === open) d++;
-    else if (s[i] === close) {
-      d--;
-      if (d === 0) return i + 1;
-    }
-  }
-  return s.length;
-}
-
-function describeMember(headerTrim, rec, src, masked, lineStarts, start, terminator, memberEnd, bodyDepth, depth) {
-  const { annotations, rest } = splitAnnotations(headerTrim);
-  const { modifiers, rest: afterMods } = splitModifiers(rest);
-  const line = lineOf(lineStarts, start);
-  const doc = null; // filled in later pass for members (kept light on purpose)
-
-  const isNestedType = /(?:^|\s)(?:class|interface|enum|record|@interface)\s/.test(
-    ' ' + afterMods.replace(/^[\w$.<>,\[\]\s]*\s/, '')
-  ) || /^(?:class|interface|enum|record|@interface)\s/.test(afterMods.trim()) ||
-    /(?:^|\s)(?:class|interface|enum|record)\s+[A-Za-z_$][\w$]*\s*(?:<[^>]*>)?\s*(?:extends|implements|$|\{)/.test(afterMods);
-
-  if (isNestedType) return null; // represented by its own type record
-
-  // A member whose initialiser contains a call is still a field:
-  //   `private final Comparator<X> c = new Comparator<X>() { ... };`
-  // Decide by position — a `=` before the first `(` means field, not method.
-  const parenIdx = afterMods.indexOf('(');
-  const eqIdx = indexOfTopLevel(afterMods, '=');
-  const isField = eqIdx >= 0 && (parenIdx < 0 || eqIdx < parenIdx) && !/^\s*(?:class|interface|enum|record)\b/.test(afterMods);
-  const isCallable = !isField && parenIdx >= 0 && terminator > start;
-
-  if (!isCallable) {
-    // ---- field(s) ---------------------------------------------------------
-    const body = afterMods.trim().replace(/;$/, '');
-    const eq = indexOfTopLevel(body, '=');
-    const declPart = (eq >= 0 ? body.slice(0, eq) : body).trim();
-    const initPart = eq >= 0 ? body.slice(eq + 1).trim() : null;
-    const { type, rest: namesPart } = readType(declPart);
-    if (!type) return null;
-    const names = splitTopLevel(namesPart)
-      .map((n) => n.trim())
-      .filter(Boolean)
-      .map((n) => n.replace(/^.*\s/, '').replace(/[[\]]/g, ''));
-    const fieldLines = masked.slice(start, memberEnd).split('\n').length - 1;
-    return {
-      k: 'field',
-      name: names[0] || '?',
-      bodyLines: fieldLines,
-      extraNames: names.slice(1),
-      type: normalizeTypeRef(type),
-      rawType: type,
-      modifiers,
-      annotations: annotations.map((a) => a.split('(')[0].replace('@', '')),
-      line,
-      init: initPart ? initPart.slice(0, 160) : null,
-      enumConst: false,
-    };
-  }
-
-  // ---- method / constructor ----------------------------------------------
-  // A constructor has no return type: `readType` would otherwise swallow the
-  // constructor name as if it were a type and the whole member would be lost.
-  const { rest: afterTypeParams } = stripTypeParams(afterMods);
-  const isCtor = new RegExp(`^\\s*${rec.name.replace(/[$]/g, '\\$')}\\s*\\(`).test(afterTypeParams);
-
-  let name;
-  let returnType;
-  let afterReturn;
-  let openParen;
-  if (isCtor) {
-    name = rec.name;
-    returnType = '';
-    afterReturn = afterTypeParams;
-    openParen = afterTypeParams.indexOf('(');
-  } else if (!afterTypeParams.includes('(')) {
-    // record compact constructor: `public Foo { ... }`
-    if (afterTypeParams.trim() !== rec.name) return null;
-    name = rec.name;
-    returnType = '';
-    afterReturn = `${rec.name}()`;
-    openParen = afterReturn.indexOf('(');
-  } else {
-    const read = readType(afterTypeParams);
-    returnType = read.type;
-    afterReturn = read.rest;
-    const nameMatch = /^\s*([A-Za-z_$][\w$]*)\s*\(/.exec(afterReturn);
-    if (!nameMatch) return null;
-    name = nameMatch[1];
-    openParen = afterReturn.indexOf('(', nameMatch.index);
-  }
-
-  const closeParen = skipBalanced(afterReturn, openParen, '(', ')') - 1;
-  if (closeParen < openParen) return null;
-  const paramsRaw = afterReturn.slice(openParen + 1, closeParen);
-  const tail = afterReturn.slice(closeParen + 1);
-  const throwsMatch = /\bthrows\b([^{]*)/.exec(tail);
-
-  const isConstructor = isCtor || (name === rec.name && !returnType);
-  const params = splitTopLevel(paramsRaw).map((p) => {
-    const t = p.trim();
-    const nm = /([A-Za-z_$][\w$]*)\s*$/.exec(t);
-    const { type } = readType(t.replace(/^\s*(?:final\s+)?/, ''));
-    return { name: nm ? nm[1] : '', type: normalizeTypeRef(type || t) };
-  });
-
-  const bodySlice = masked.slice(terminator + 1, memberEnd - 1);
-  BRANCH_RE.lastIndex = 0;
-  let branch = 0;
-  while (BRANCH_RE.exec(bodySlice)) branch++;
-  const bodyLines = bodySlice ? bodySlice.split('\n').length - 1 : 0;
-
-  return {
-    k: isConstructor ? 'ctor' : 'method',
-    name,
-    type: isConstructor ? null : normalizeTypeRef(returnType),
-    rawType: isConstructor ? null : returnType,
-    params,
-    paramCount: params.length,
-    throws: throwsMatch ? splitTopLevel(throwsMatch[1]).map((s) => normalizeTypeRef(s)) : [],
-    modifiers,
-    annotations: annotations.map((a) => a.split('(')[0].replace('@', '')),
-    line,
-    branch,
-    complexity: 1 + branch,
-    bodyLines,
-    abstract: modifiers.includes('abstract') || terminator > 0 && masked[terminator] === ';',
-    enumConst: false,
-  };
-}
-
-function indexOfTopLevel(s, ch) {
-  let angle = 0;
-  let depth = 0;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (c === '<') angle++;
-    else if (c === '>') angle--;
-    else if (c === '(' || c === '[') depth++;
-    else if (c === ')' || c === ']') depth--;
-    else if (c === ch && angle <= 0 && depth <= 0) return i;
-  }
-  return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -670,24 +182,25 @@ export async function runExtraction(opts = {}) {
   if (opts.out) OUT_DIR = path.resolve(process.cwd(), opts.out);
   if (opts.pretty !== undefined) PRETTY = opts.pretty;
   if (opts.quiet !== undefined) QUIET = opts.quiet;
-  if (opts.parser) USE_AST = opts.parser !== 'regex';
   if (opts.src) SRC = resolveSourceDir(opts.src);
   t0 = Date.now();
   const srcDir = SRC_DIR();
   const mount = MOUNT();
   if (process.env.ATLAS_PARSE_ONLY) {
-    const { types } = parseFile(path.resolve(process.env.ATLAS_PARSE_ONLY));
-    console.log(JSON.stringify(types.map((t) => ({ ...t, members: t.members.slice(0, 6), memberCount: t.members.length })), null, 1));
+    const abs = path.resolve(process.env.ATLAS_PARSE_ONLY);
+    const rel = `${mount}/${path.relative(srcDir, abs).split(path.sep).join('/')}`;
+    const { parser } = await initJavaParser();
+    const { types, file } = parseJavaFileWith(parser, abs, rel, AST_OPTIONS);
+    console.log(JSON.stringify({ file, types: types.map((t) => ({ ...t, members: t.members.slice(0, 6), memberCount: t.members.length })) }, null, 1));
     process.exit(0);
   }
 
   const files = walk(srcDir);
   if (!QUIET) process.stderr.write(`[extract] ${files.length} java files under ${srcDir} (mount: ${mount})\n`);
 
-  // The AST extractor is loaded once for the whole tree; the regex parser needs
-  // no setup. `refsByPath` carries the inline `zombie.*` runs each parser saw, so
-  // the reference graph below never re-reads a file.
-  const astParser = USE_AST ? (await initJavaParser()).parser : null;
+  // One parser for the whole tree. `refsByPath` carries the inline `zombie.*`
+  // runs the walk saw, so the reference graph below never re-reads a file.
+  const { parser: astParser, versions } = await initJavaParser();
   const refsByPath = new Map();
   const parseErrorFiles = [];
   const allTypes = [];
@@ -695,10 +208,8 @@ export async function runExtraction(opts = {}) {
   for (const f of files) {
     try {
       const rel = `${MOUNT()}/${path.relative(SRC_DIR(), f).split(path.sep).join('/')}`;
-      const { types, file, refs } = USE_AST
-        ? parseJavaFileWith(astParser, f, rel, AST_OPTIONS)
-        : Object.assign(parseFile(f), { refs: null });
-      if (refs) refsByPath.set(file.path, refs);
+      const { types, file, refs } = parseJavaFileWith(astParser, f, rel, AST_OPTIONS);
+      refsByPath.set(file.path, refs);
       if (file.parseErrors) parseErrorFiles.push(file.path);
       fileRecords.push(file);
       for (const t of types) allTypes.push(t);
@@ -706,7 +217,7 @@ export async function runExtraction(opts = {}) {
       process.stderr.write(`[extract] FAILED ${f}: ${err.stack}\n`);
     }
   }
-  if (!QUIET) process.stderr.write(`[extract] parsed ${allTypes.length} types in ${Date.now() - t0}ms (${PARSER_FLAG})\n`);
+  if (!QUIET) process.stderr.write(`[extract] parsed ${allTypes.length} types in ${Date.now() - t0}ms (tree-sitter)\n`);
 
   // ---- index classes ---------------------------------------------------------
   const classByFqn = new Map();
@@ -868,28 +379,13 @@ export async function runExtraction(opts = {}) {
       if (!typesByPath.has(t.path)) typesByPath.set(t.path, []);
       typesByPath.get(t.path).push(t);
     }
-    const FQN_RE = /\bzombie(?:\.[A-Za-z_$][\w$]*)+/g;
     let fqnEdges = 0;
     for (const abs of files) {
       const rel = `${MOUNT()}/${path.relative(SRC_DIR(), abs).split(path.sep).join('/')}`;
       const owners = typesByPath.get(rel);
       if (!owners || !owners.length) continue;
 
-      // The AST walker reports the reference runs it saw; the regex parser is
-      // fed the masked text it always was. Both then share one attribution and
-      // resolution path, so the two modes cannot drift apart here.
-      const refs = refsByPath.get(rel);
-      let runs;
-      if (USE_AST) {
-        runs = refs;
-      } else {
-        const { masked } = maskSource(fs.readFileSync(abs, 'utf8'));
-        runs = [];
-        FQN_RE.lastIndex = 0;
-        let m;
-        while ((m = FQN_RE.exec(masked))) runs.push({ start: m.index, text: m[0] });
-      }
-      for (const run of runs) {
+      for (const run of refsByPath.get(rel) ?? []) {
         // resolve to the longest prefix that names a known type
         let name = run.text;
         let target = classByFqn.get(name);
@@ -1205,9 +701,9 @@ export async function runExtraction(opts = {}) {
   const meta = {
     generated: new Date().toISOString(),
     schemaVersion: 2,
-    parser: USE_AST ? 'tree-sitter' : 'regex',
-    extractor: USE_AST ? { parser: (await initJavaParser()).versions.grammar, runtime: (await initJavaParser()).versions.runtime } : null,
-    parseErrors: USE_AST ? { files: parseErrorFiles.length, names: parseErrorFiles.slice(0, 20) } : null,
+    parser: 'tree-sitter',
+    extractor: { parser: versions.grammar, runtime: versions.runtime },
+    parseErrors: { files: parseErrorFiles.length, names: parseErrorFiles.slice(0, 20) },
     sourceRoot: source().display,
   sourceMount: MOUNT(),
     sourceRootAbs: SRC_DIR(),
@@ -1339,7 +835,7 @@ export async function runExtraction(opts = {}) {
     );
   }
 
-  return { files: files.length, types: allTypes.length, out: OUT_DIR, src: srcDir, mount, parser: USE_AST ? 'tree-sitter' : 'regex' };
+  return { files: files.length, types: allTypes.length, out: OUT_DIR, src: srcDir, mount, parser: 'tree-sitter' };
 }
 
 // Run when invoked directly (`node tools/extract.mjs`), stay quiet when imported.

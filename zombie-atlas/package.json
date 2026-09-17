@@ -4,6 +4,7 @@
   "description": "Interactive treemap, hierarchy and dependency atlas for the decompiled Project Zomboid source tree",
   "scripts": {
     "data": "node tools/extract.mjs",
+    "parity": "node tools/parity.mjs",
     "validate": "node tools/validate.mjs",
     "build": "node tools/build.mjs",
     "dev": "node tools/build.mjs --dev",
