@@ -28,16 +28,11 @@ let PRETTY = argv.includes("--pretty");
 let QUIET = argv.includes('--quiet');
 const { src: cliSrc, out: cliOut } = parseCommonArgs(argv);
 
-// `--parser` used to switch between the tree-sitter extractor and the original
-// regex scanner. The scanner is gone; the flag is accepted (and ignored) so an
-// old command line fails loudly instead of quietly doing something else.
-const LEGACY_PARSER_ARG = (() => {
+/** The parser asked for on the command line, if any. Tree-sitter is the only one there is. */
+const parserArg = (() => {
   const i = argv.indexOf('--parser');
   return i >= 0 ? argv[i + 1] : undefined;
 })();
-if (LEGACY_PARSER_ARG && LEGACY_PARSER_ARG !== 'ast' && LEGACY_PARSER_ARG !== 'tree-sitter') {
-  process.stderr.write(`[extract] the "${LEGACY_PARSER_ARG}" parser was removed; using tree-sitter\n`);
-}
 /** Ast extraction options: the canonical branch-node set (see docs/parser-parity.md). */
 const AST_OPTIONS = { excludeDefaultLabels: true };
 
@@ -179,6 +174,11 @@ function domainOf(pkg) {
  * @returns {Promise<{files:number, types:number, out:string, src:string, mount:string}>}
  */
 export async function runExtraction(opts = {}) {
+  // No dual path: a command line that asks for the deleted scanner fails instead
+  // of quietly building a bundle whose provenance differs from what was asked.
+  if (parserArg && !/^(ast|tree-sitter)$/.test(parserArg)) {
+    throw new Error(`the "${parserArg}" parser no longer exists — tree-sitter is the only parser`);
+  }
   if (opts.out) OUT_DIR = path.resolve(process.cwd(), opts.out);
   if (opts.pretty !== undefined) PRETTY = opts.pretty;
   if (opts.quiet !== undefined) QUIET = opts.quiet;

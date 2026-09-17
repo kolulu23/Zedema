@@ -537,7 +537,7 @@ sh tools/pw.sh node tools/test/runner.mjs --spec treemap
 ```
 
 - `npm run dev` keeps the atlas in step with the tree: it generates the bundle
-  when the server starts and regenerates it (about 2.5 s for all 3,078 files,
+  when the server starts and regenerates it (about 6.5 s for all 3,078 files,
   debounced to 400 ms) whenever a `.java` file under the source directory is
   added, changed or removed, then triggers a browser reload. Re-extraction runs
   in the Vite process, so nothing else needs to be running. Set

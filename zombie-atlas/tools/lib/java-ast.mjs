@@ -1,10 +1,11 @@
 /**
- * Tree-sitter Java extractor.
+ * The Java extractor: `tree-sitter-java`, one parse per file, then a walk.
  *
- * Replaces the hand-made mask/brace-depth/regex scanner with the
- * `tree-sitter-java` grammar: one parse per file, then a walk that produces the
- * same record shape `parseFile()` used to produce, so `tools/extract.mjs` — its
- * resolution, aggregation and emission — is unchanged.
+ * It is the only parser in the project — `tools/parity.mjs` guards the output
+ * against drift, and `docs/parser-parity.md` records what replacing the earlier
+ * hand-made scanner changed. Each record keeps the shape `tools/extract.mjs`
+ * consumes, so resolution, aggregation and emission are unaffected by how the
+ * declarations were found.
  *
  * Three properties are deliberate and load-bearing:
  *
