@@ -1,0 +1,64 @@
+{
+  "versions": {
+    "grammar": "tree-sitter-java@0.23.5",
+    "runtime": "web-tree-sitter@0.27.0"
+  },
+  "files": 3078,
+  "totals": {
+    "types": 4749,
+    "members": 96257,
+    "enumConstants": 4349,
+    "refs": 30146,
+    "edges": 20
+  },
+  "kindCounts": {
+    "class": 4064,
+    "interface": 246,
+    "enum": 375,
+    "record": 47,
+    "annotation": 17
+  },
+  "memberKindCounts": {
+    "method": 46990,
+    "ctor": 2655,
+    "field": 46612
+  },
+  "lineTotals": {
+    "loc": 754419,
+    "code": 643743,
+    "comment": 10057,
+    "blank": 100619
+  },
+  "parseErrors": {
+    "count": 1,
+    "names": [
+      "zombie/core/CreditsName.java"
+    ]
+  },
+  "digests": {
+    "types": {
+      "count": 4749,
+      "digest": "0d52991ca8eb3b05"
+    },
+    "members": {
+      "count": 96257,
+      "digest": "5536e2833b617792"
+    },
+    "enumConstants": {
+      "count": 4349,
+      "digest": "a9272ba6f360c07b"
+    },
+    "lines": {
+      "count": 4749,
+      "digest": "53c384361c25c2ca"
+    },
+    "refs": {
+      "count": 30146,
+      "digest": "804d27cfd13d0b53"
+    },
+    "edges": {
+      "count": 20,
+      "digest": "2a194e596dc40f06"
+    }
+  }
+}

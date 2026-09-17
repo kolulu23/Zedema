@@ -4,6 +4,7 @@
   "description": "Interactive treemap, hierarchy and dependency atlas for the decompiled Project Zomboid source tree",
   "scripts": {
     "data": "node tools/extract.mjs",
+    "parity": "node tools/parity.mjs",
     "validate": "node tools/validate.mjs",
     "build": "node tools/build.mjs",
     "dev": "node tools/build.mjs --dev",
@@ -23,9 +24,11 @@
     "@types/d3-selection": "^3.0.11",
     "@types/node": "^26.5.1",
     "playwright": "^1.63.0",
+    "tree-sitter-java": "^0.23.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
-    "vite-plugin-solid": "^2.11.14"
+    "vite-plugin-solid": "^2.11.14",
+    "web-tree-sitter": "^0.27.0"
   },
   "dependencies": {
     "d3-force": "^3.0.0",

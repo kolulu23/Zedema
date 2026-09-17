@@ -65,7 +65,7 @@ function atlasDataPlugin(): Plugin {
       pretty: flag('ZOMBIE_ATLAS_PRETTY'),
     });
     console.log(
-      `[atlas] data: ${result.types} types from ${result.files} files → ` +
+      `[atlas] data: ${result.types} types from ${result.files} files (${result.parser}) → ` +
         `${path.relative(process.cwd(), result.out)}${reason ? `  (${reason})` : ''}  ${Date.now() - started}ms`
     );
     return true;

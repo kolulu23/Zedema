@@ -13,6 +13,7 @@
  *   node tools/build.mjs --dev           # data + dev server (port 5183)
  *   node tools/build.mjs --skip-data     # UI-only build, reuse dist/data
  *   node tools/build.mjs --src /path/to/decompiled --pretty
+ *   node tools/build.mjs --parser regex      # legacy scanner, for comparison
  *
  * Equivalent plain-Vite invocations (defaults only):
  *   npx vite build        npx vite
