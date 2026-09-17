@@ -86,6 +86,73 @@ export const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => {
   return el as T;
 };
 
+/**
+ * One label/value row of a `<dl class="kv">` metrics table.
+ *
+ * The value column truncates instead of wrapping (see `.kv dd` in the
+ * stylesheet), because file paths and modifier lists are wider than any side
+ * panel: a clipped value stays a single line and `watchOverflowTitles` gives
+ * the full text back as a tooltip.
+ */
+export function kv(k: string, v: string): DocumentFragment {
+  const f = document.createDocumentFragment();
+  f.append(h('dt', { text: k }), h('dd', { 'data-overflow': v, text: v }));
+  return f;
+}
+
+/**
+ * Give every clipped `[data-overflow]` cell its full text as a `title` — and
+ * only the clipped ones, since a tooltip on a value that is already readable is
+ * noise. Safe to call after every paint; it does not change any layout.
+ */
+export function syncOverflowTitles(root: ParentNode): void {
+  for (const el of root.querySelectorAll<HTMLElement>('[data-overflow]')) {
+    if (el.scrollWidth > el.clientWidth + 1) el.title = el.dataset.overflow ?? '';
+    else el.removeAttribute('title');
+  }
+}
+
+const overflowWatched = new WeakSet<HTMLElement>();
+let overflowObserver: ResizeObserver | null = null;
+
+/**
+ * Keep the tooltips of a panel honest: sync them now, and again whenever the
+ * panel's box changes — a narrower inspector clips values that used to fit, and
+ * a wider one must drop the now-redundant tooltips.
+ */
+export function watchOverflowTitles(root: HTMLElement): void {
+  syncOverflowTitles(root);
+  if (overflowWatched.has(root)) return;
+  overflowWatched.add(root);
+  overflowObserver ??= new ResizeObserver((entries) => {
+    for (const entry of entries) syncOverflowTitles(entry.target);
+  });
+  overflowObserver.observe(root);
+}
+
+/**
+ * Repaint a subtree that contains a text input, putting focus and the caret
+ * back where they were.
+ *
+ * Rebuilding an input detaches the live one, and the replacement starts with
+ * the caret at position 0 — which both loses the user's place and makes the
+ * next keystroke land at the start of the value instead of at the cursor. Only
+ * the control named by `id` is restored, so a click elsewhere is not undone.
+ */
+export function preserveInputFocus(id: string, paint: () => void): void {
+  const active = document.activeElement;
+  const caret =
+    active instanceof HTMLInputElement && active.id === id
+      ? { start: active.selectionStart, end: active.selectionEnd, dir: active.selectionDirection }
+      : null;
+  paint();
+  if (!caret) return;
+  const next = document.getElementById(id);
+  if (!(next instanceof HTMLInputElement)) return;
+  next.focus();
+  next.setSelectionRange(caret.start ?? next.value.length, caret.end ?? next.value.length, caret.dir ?? undefined);
+}
+
 /** Debounce for resize / input handlers. */
 export function debounce<T extends (...a: never[]) => void>(fn: T, ms: number): T {
   let t: number | undefined;

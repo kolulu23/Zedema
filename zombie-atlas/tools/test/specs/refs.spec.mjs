@@ -38,7 +38,17 @@ export default {
       const rows = await refsRows(page).count();
       t.assert.ok(rows > 0, 'the references section rendered no rows');
       const text = await refsSection(page).innerText();
-      t.assert.match(text, /(\d+)% resolved/i, `no resolution figure in: ${text.slice(0, 120)}`);
+      // The resolution figure is tree-wide and says so; it is not this type's
+      // score, which is what the old "37% resolved" badge implied.
+      t.assert.match(
+        text,
+        /\d[\d,]* \/ \d[\d,]* sites resolved, tree-wide/i,
+        `no tree-wide resolution figure in: ${text.slice(0, 120)}`
+      );
+      const counts = await page.evaluate(() => window.zombieAtlas.atlas.meta.refCounts);
+      if (counts.unresolved > 0) {
+        t.assert.match(text, /counted, never guessed/i, 'the panel does not explain what the unresolved sites are');
+      }
       return `${rows} reference rows`;
     });
 

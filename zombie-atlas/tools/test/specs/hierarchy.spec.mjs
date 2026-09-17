@@ -190,6 +190,23 @@ export default {
       return `${before} → ${after} roots`;
     });
 
+    await t.test('the roots filter types at the caret, not at the start', async () => {
+      await hierarchyFilter(page).fill('');
+      await t.settle(400);
+
+      // The pane is rebuilt on every keystroke (the tree follows the filter
+      // too), so the caret has to survive the repaint — it used to land back at
+      // position 0 and reverse whatever was typed.
+      await hierarchyFilter(page).click();
+      await hierarchyFilter(page).pressSequentially('Iso', { delay: 40 });
+      await t.settle(500);
+      t.assert.equal(await hierarchyFilter(page).inputValue(), 'Iso', 'typing into the roots filter reversed the query');
+
+      await hierarchyFilter(page).fill('');
+      await t.settle(400);
+      return '"Iso" in order';
+    });
+
     await t.test('choosing a root in the left list renders that hierarchy', async () => {
       const link = hierarchyLinks(page).first();
       const name = ((await hierarchyRootName(link).textContent()) ?? '').trim();

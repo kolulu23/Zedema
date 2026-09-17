@@ -24,7 +24,7 @@ import {
   KIND_NAMES,
 } from '../domain';
 import { store, type AppState } from '../state';
-import { $, fmtBytes, fmtCompact, fmtInt, h } from '../util';
+import { $, fmtBytes, fmtCompact, fmtInt, h, kv, preserveInputFocus, watchOverflowTitles } from '../util';
 import { openSource } from './source';
 
 const KIND_BADGE = ['C', 'I', 'E', 'R', '@'];
@@ -169,22 +169,30 @@ function onBodyClick(e: MouseEvent) {
 }
 
 export function render(state: AppState) {
+  const a = atlas;
   const body = $('#inspector-body');
-  if (!atlas) return;
+  if (!a) return;
   const { classId, packagePath } = state.selection;
-  if (classId != null && atlas.byId[classId]) {
-    // Members are sharded per package: fetch the shard for whatever is selected
-    // (treemap click, search hit, hierarchy node, insight row — all of them).
-    if (!memberCache.has(classId)) void ensureMembersFor(classId);
-    void ensureRefs(atlas.byId[classId].pkg);
-    body.replaceChildren(classPanel(atlas.byId[classId]));
-    ensureDeps();
-  } else if (packagePath && atlas.pkgByPath.get(packagePath)) {
-    body.replaceChildren(pkgPanel(atlas.pkgByPath.get(packagePath)!));
-  } else {
-    memberFilter = '';
-    body.replaceChildren(overviewPanel());
-  }
+  // A shard that finishes loading repaints the whole panel — including the
+  // filter input, if it is on screen. Typing itself never repaints the panel
+  // (see `membersBlock`), so this only has to cover the asynchronous path.
+  preserveInputFocus('member-filter', () => {
+    if (classId != null && a.byId[classId]) {
+      // Members are sharded per package: fetch the shard for whatever is selected
+      // (treemap click, search hit, hierarchy node, insight row — all of them).
+      if (!memberCache.has(classId)) void ensureMembersFor(classId);
+      void ensureRefs(a.byId[classId].pkg);
+      body.replaceChildren(classPanel(a.byId[classId]));
+      ensureDeps();
+    } else if (packagePath && a.pkgByPath.get(packagePath)) {
+      body.replaceChildren(pkgPanel(a.pkgByPath.get(packagePath)!));
+    } else {
+      memberFilter = '';
+      body.replaceChildren(overviewPanel());
+    }
+  });
+  // Truncated metric values only show their full text while they are clipped.
+  watchOverflowTitles(body);
 }
 
 /** ------------------------------------------------------------- class view -- */
@@ -269,56 +277,19 @@ function classPanel(c: ClassRec): HTMLElement {
   );
 
   // ---- members
+  // Badge totals come first: the rows below read them while they are built,
+  // and the filter repaints those same rows later.
+  refBadges = new Map();
+  const classRefs = refsFor(c);
+  if (classRefs) {
+    for (const [line, m] of classRefs) refBadges.set(line, { outTotal: totalRows(m.out), inTotal: totalRows(m.in) });
+  }
   const members = memberCache.get(c.id);
   const memSection = h('div', { class: 'insp-section' });
   if (!members) {
     memSection.append(h('h3', { text: msg("Members") }), h('div', { class: 'empty', text: msg("loading…") }));
   } else {
-    const f = memberFilter.toLowerCase();
-    const shown = f
-      ? members.filter((m) => `${m.name} ${m.type} ${m.params.join(' ')} ${m.annotations.join(' ')}`.toLowerCase().includes(f))
-      : members;
-    const methods = shown.filter((m) => m.kind !== 'field');
-    const fields = shown.filter((m) => m.kind === 'field');
-    memSection.append(
-      h(
-        'h3',
-        {},
-        msg("Members "),
-        h('span', { class: 'count', text: `${shown.length}/${members.length}` }),
-        h('input', {
-          type: 'text',
-          id: "member-filter",
-          placeholder: msg("filter…"),
-          value: memberFilter,
-          style: { marginLeft: 'auto', width: '120px', padding: '1px 5px', fontSize: '11px' },
-          oninput: (e: Event) => {
-            memberFilter = (e.target as HTMLInputElement).value;
-            render(store.state);
-            const inp = document.querySelector<HTMLInputElement>('#inspector-body #member-filter');
-            inp?.focus();
-          },
-        })
-      )
-    );
-    if (methods.length) {
-      memSection.append(h('h3', { style: { marginTop: '8px' }, text: msg("Methods ({0})", methods.length) }));
-      const list = h('div', { class: 'member-list' });
-      for (const m of methods.slice(0, 400)) list.append(memberRow(m));
-      memSection.append(list);
-    }
-    if (fields.length) {
-      memSection.append(h('h3', { style: { marginTop: '8px' }, text: msg("Fields ({0})", fields.length) }));
-      const list = h('div', { class: 'member-list' });
-      for (const m of fields.slice(0, 300)) list.append(memberRow(m));
-      memSection.append(list);
-    }
-    if (!shown.length) memSection.append(h('div', { class: 'empty', text: msg("No members match the filter") }));
-  }
-  refBadges = new Map();
-  const classRefs = refsFor(c);
-  if (classRefs) {
-    for (const [line, m] of classRefs) refBadges.set(line, { outTotal: totalRows(m.out), inTotal: totalRows(m.in) });
+    memSection.append(membersBlock(members));
   }
   wrap.append(memSection);
 
@@ -354,6 +325,61 @@ function classPanel(c: ClassRec): HTMLElement {
 
 /** Badge totals for the member rows of the type currently rendered. */
 let refBadges = new Map<number, { outTotal: number; inTotal: number }>();
+
+/**
+ * The member list and its name filter, as one block.
+ *
+ * The filter is a live control: typing repaints the list and the match count in
+ * place and never touches the input itself, so focus and the caret stay exactly
+ * where the user left them. Rebuilding the whole panel from the `input` event
+ * (as this used to) replaced the input on every keystroke, and the replacement
+ * took the caret back to position 0 — each new character landed *before* the
+ * previous one.
+ */
+function membersBlock(members: MemberRec[]): HTMLElement {
+  const count = h('span', { class: 'count' });
+  const body = h('div');
+  const input = h('input', {
+    type: 'text',
+    id: 'member-filter',
+    placeholder: msg("filter…"),
+    'aria-label': msg("Filter members by name"),
+    value: memberFilter,
+    style: { marginLeft: 'auto', width: '120px', padding: '1px 5px', fontSize: '11px' },
+    oninput: () => {
+      memberFilter = input.value;
+      paint();
+    },
+  });
+
+  function paint() {
+    const f = memberFilter.trim().toLowerCase();
+    const shown = f
+      ? members.filter((m) => `${m.name} ${m.type} ${m.params.join(' ')} ${m.annotations.join(' ')}`.toLowerCase().includes(f))
+      : members;
+    const methods = shown.filter((m) => m.kind !== 'field');
+    const fields = shown.filter((m) => m.kind === 'field');
+    count.textContent = `${shown.length}/${members.length}`;
+    const parts: HTMLElement[] = [];
+    if (methods.length) {
+      parts.push(h('h3', { style: { marginTop: '8px' }, text: msg("Methods ({0})", methods.length) }));
+      const list = h('div', { class: 'member-list' });
+      for (const m of methods.slice(0, 400)) list.append(memberRow(m));
+      parts.push(list);
+    }
+    if (fields.length) {
+      parts.push(h('h3', { style: { marginTop: '8px' }, text: msg("Fields ({0})", fields.length) }));
+      const list = h('div', { class: 'member-list' });
+      for (const m of fields.slice(0, 300)) list.append(memberRow(m));
+      parts.push(list);
+    }
+    if (!shown.length) parts.push(h('div', { class: 'empty', text: msg("No members match the filter") }));
+    body.replaceChildren(...parts);
+  }
+
+  paint();
+  return h('div', {}, h('h3', {}, msg("Members "), count, input), body);
+}
 
 function totalRows(rows: RefRow[] | null | undefined): number {
   return (rows ?? []).reduce((a, r) => a + r[3], 0);
@@ -392,13 +418,20 @@ function refsSection(c: ClassRec, refs: Map<number, MemberRefs> | null): HTMLEle
     },
     { out: 0, in: 0 }
   );
-  const confidence = refCounts && refCounts.sites ? Math.round((refCounts.resolved / refCounts.sites) * 100) : null;
-  const header = h('h3', {}, msg("References"),
-    h('span', { class: 'count', text: `→${totals.out} ←${totals.in}` }),
-    confidence !== null ? h('span', { class: 'badge', style: { marginLeft: 'auto' }, text: msg("{0}% resolved", confidence) }) : null
-  );
+  const header = h('h3', {}, msg("References"), h('span', { class: 'count', text: `→${totals.out} ←${totals.in}` }));
   // `data-refs` is the language-neutral hook the test suite locates by
   const wrap = h('div', { class: 'insp-section', 'data-refs': 'section' }, header);
+  // The resolution figure describes the whole bundle, not the selected type, so
+  // it gets a line of its own instead of a badge in the header — where "37%
+  // resolved" read as if it were this type's score.
+  if (refCounts) {
+    wrap.append(
+      h('div', {
+        class: 'refs-total',
+        text: msg("{0} / {1} sites resolved, tree-wide", fmtInt(refCounts.resolved), fmtInt(refCounts.sites)),
+      })
+    );
+  }
 
   const group = (kind: number, label: string, limit = 12) => {
     const rows = [...(outRows.get(kind as never)?.values() ?? [])].sort((a, b) => b[3] - a[3]);
@@ -451,7 +484,11 @@ function refsSection(c: ClassRec, refs: Map<number, MemberRefs> | null): HTMLEle
       h('div', {
         class: 'empty',
         style: { marginTop: '6px' },
-        text: msg("{0} sites in this tree resolved to a class only, {1} not at all — receivers that cannot be typed are counted, never guessed.", refCounts.classOnly, refCounts.unresolved),
+        text: msg(
+          "A site is one call, read, write or creation in the source. {0} resolved to a class but not to a member, {1} could not be typed at all — counted, never guessed, so the lists above are a lower bound.",
+          fmtInt(refCounts.classOnly),
+          fmtInt(refCounts.unresolved)
+        ),
       })
     );
   }
@@ -620,11 +657,5 @@ function section(title: string, ...children: (HTMLElement | null)[]): HTMLElemen
   const el = h('div', { class: 'insp-section' }, h('h3', { text: title }));
   for (const c of children) if (c) el.append(c);
   return el;
-}
-
-function kv(k: string, v: string): DocumentFragment {
-  const f = document.createDocumentFragment();
-  f.append(h('dt', { text: k }), h('dd', { text: v }));
-  return f;
 }
 

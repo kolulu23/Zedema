@@ -7,7 +7,7 @@ import { msg, trLabel } from '../i18n';
 
 import { type Atlas } from '../domain';
 import { store, type AppState } from '../state';
-import { fmtCompact, fmtInt, h } from '../util';
+import { fmtCompact, fmtInt, h, kv, watchOverflowTitles } from '../util';
 
 interface TopMethod {
   classId: number;
@@ -51,6 +51,8 @@ export function renderInsights(state: AppState) {
   pane.hidden = false;
   document.getElementById('canvas')!.style.visibility = 'hidden';
   pane.replaceChildren(...cardList());
+  // The "Scale" card carries the same truncating `.kv` rows as the inspector.
+  watchOverflowTitles(pane);
 }
 
 export function teardownInsights() {
@@ -309,11 +311,5 @@ function card(title: string, sub: string, ...body: (HTMLElement | null)[]): HTML
   const el = h('div', { class: 'card' }, h('h3', { text: title }), h('div', { class: 'sub', text: sub }));
   for (const b of body) if (b) el.append(b);
   return el;
-}
-
-function kv(k: string, v: string): DocumentFragment {
-  const f = document.createDocumentFragment();
-  f.append(h('dt', { text: k }), h('dd', { text: v }));
-  return f;
 }
 
