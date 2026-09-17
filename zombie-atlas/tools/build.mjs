@@ -13,6 +13,7 @@
  *   node tools/build.mjs --dev           # data + dev server (port 5183)
  *   node tools/build.mjs --skip-data     # UI-only build, reuse dist/data
  *   node tools/build.mjs --src /path/to/decompiled --pretty
+ *   node tools/build.mjs --parser regex      # legacy scanner, for comparison
  *
  * Equivalent plain-Vite invocations (defaults only):
  *   npx vite build        npx vite
@@ -25,6 +26,7 @@ const { src: cliSrc, out: cliOut } = parseCommonArgs(argv);
 const DEV = argv.includes('--dev');
 const SKIP_DATA = argv.includes('--skip-data');
 const PRETTY = argv.includes('--pretty');
+const PARSER = argv.includes('--parser') ? argv[argv.indexOf('--parser') + 1] : undefined;
 
 // ---------------------------------------------------------------------------
 // translate flags into the environment the Vite plugin reads
@@ -33,6 +35,7 @@ if (cliSrc) process.env.ZOMBIE_SRC = cliSrc;
 if (cliOut) process.env.ZOMBIE_DATA_OUT = cliOut;
 if (SKIP_DATA) process.env.ZOMBIE_ATLAS_SKIP_DATA = '1';
 if (PRETTY) process.env.ZOMBIE_ATLAS_PRETTY = '1';
+if (PARSER) process.env.ZOMBIE_ATLAS_PARSER = PARSER;
 
 if (!SKIP_DATA) {
   try {

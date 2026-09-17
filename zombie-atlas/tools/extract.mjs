@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCommonArgs, resolveDataOut, resolveSourceDir } from './lib/config.mjs';
+import { initJavaParser, parseJavaFileWith } from './lib/java-ast.mjs';
 import {
   maskSource,
   braceDepth,
@@ -39,6 +40,22 @@ const argv = process.argv.slice(2);
 let PRETTY = argv.includes("--pretty");
 let QUIET = argv.includes('--quiet');
 const { src: cliSrc, out: cliOut } = parseCommonArgs(argv);
+
+/**
+ * Which parser builds the records.
+ *
+ *   `ast`   — the tree-sitter grammar (`tools/lib/java-ast.mjs`): the shipped default
+ *   `regex` — the original mask/brace-depth scanner, kept as an escape hatch
+ *
+ * `tools/parity.mjs` runs both over the same tree and is the gate for changes here.
+ */
+const PARSER_FLAG = (() => {
+  const i = argv.indexOf('--parser');
+  return (i >= 0 ? argv[i + 1] : undefined) ?? process.env.ZOMBIE_ATLAS_PARSER ?? 'ast';
+})();
+let USE_AST = PARSER_FLAG !== 'regex';
+/** Ast extraction options: the canonical branch-node set (see docs/parser-parity.md). */
+const AST_OPTIONS = { excludeDefaultLabels: true };
 
 /** Resolved lazily so the module can be imported without touching the disk. */
 let SRC = null;
@@ -653,6 +670,7 @@ export async function runExtraction(opts = {}) {
   if (opts.out) OUT_DIR = path.resolve(process.cwd(), opts.out);
   if (opts.pretty !== undefined) PRETTY = opts.pretty;
   if (opts.quiet !== undefined) QUIET = opts.quiet;
+  if (opts.parser) USE_AST = opts.parser !== 'regex';
   if (opts.src) SRC = resolveSourceDir(opts.src);
   t0 = Date.now();
   const srcDir = SRC_DIR();
@@ -666,18 +684,29 @@ export async function runExtraction(opts = {}) {
   const files = walk(srcDir);
   if (!QUIET) process.stderr.write(`[extract] ${files.length} java files under ${srcDir} (mount: ${mount})\n`);
 
+  // The AST extractor is loaded once for the whole tree; the regex parser needs
+  // no setup. `refsByPath` carries the inline `zombie.*` runs each parser saw, so
+  // the reference graph below never re-reads a file.
+  const astParser = USE_AST ? (await initJavaParser()).parser : null;
+  const refsByPath = new Map();
+  const parseErrorFiles = [];
   const allTypes = [];
   const fileRecords = [];
   for (const f of files) {
     try {
-      const { types, file } = parseFile(f);
+      const rel = `${MOUNT()}/${path.relative(SRC_DIR(), f).split(path.sep).join('/')}`;
+      const { types, file, refs } = USE_AST
+        ? parseJavaFileWith(astParser, f, rel, AST_OPTIONS)
+        : Object.assign(parseFile(f), { refs: null });
+      if (refs) refsByPath.set(file.path, refs);
+      if (file.parseErrors) parseErrorFiles.push(file.path);
       fileRecords.push(file);
       for (const t of types) allTypes.push(t);
     } catch (err) {
       process.stderr.write(`[extract] FAILED ${f}: ${err.stack}\n`);
     }
   }
-  if (!QUIET) process.stderr.write(`[extract] parsed ${allTypes.length} types in ${Date.now() - t0}ms\n`);
+  if (!QUIET) process.stderr.write(`[extract] parsed ${allTypes.length} types in ${Date.now() - t0}ms (${PARSER_FLAG})\n`);
 
   // ---- index classes ---------------------------------------------------------
   const classByFqn = new Map();
@@ -845,12 +874,24 @@ export async function runExtraction(opts = {}) {
       const rel = `${MOUNT()}/${path.relative(SRC_DIR(), abs).split(path.sep).join('/')}`;
       const owners = typesByPath.get(rel);
       if (!owners || !owners.length) continue;
-      const { masked } = maskSource(fs.readFileSync(abs, 'utf8'));
-      FQN_RE.lastIndex = 0;
-      let m;
-      while ((m = FQN_RE.exec(masked))) {
+
+      // The AST walker reports the reference runs it saw; the regex parser is
+      // fed the masked text it always was. Both then share one attribution and
+      // resolution path, so the two modes cannot drift apart here.
+      const refs = refsByPath.get(rel);
+      let runs;
+      if (USE_AST) {
+        runs = refs;
+      } else {
+        const { masked } = maskSource(fs.readFileSync(abs, 'utf8'));
+        runs = [];
+        FQN_RE.lastIndex = 0;
+        let m;
+        while ((m = FQN_RE.exec(masked))) runs.push({ start: m.index, text: m[0] });
+      }
+      for (const run of runs) {
         // resolve to the longest prefix that names a known type
-        let name = m[0];
+        let name = run.text;
         let target = classByFqn.get(name);
         while (!target && name.includes('.')) {
           name = name.slice(0, name.lastIndexOf('.'));
@@ -859,7 +900,7 @@ export async function runExtraction(opts = {}) {
         if (!target) continue;
         let owner = null;
         for (const t of owners) {
-          if (m.index > t.bodyStart && m.index < t.bodyEnd) {
+          if (run.start > t.bodyStart && run.start < t.bodyEnd) {
             if (!owner || t.bodyEnd - t.bodyStart < owner.bodyEnd - owner.bodyStart) owner = t;
           }
         }
@@ -1163,6 +1204,10 @@ export async function runExtraction(opts = {}) {
 
   const meta = {
     generated: new Date().toISOString(),
+    schemaVersion: 2,
+    parser: USE_AST ? 'tree-sitter' : 'regex',
+    extractor: USE_AST ? { parser: (await initJavaParser()).versions.grammar, runtime: (await initJavaParser()).versions.runtime } : null,
+    parseErrors: USE_AST ? { files: parseErrorFiles.length, names: parseErrorFiles.slice(0, 20) } : null,
     sourceRoot: source().display,
   sourceMount: MOUNT(),
     sourceRootAbs: SRC_DIR(),
@@ -1294,7 +1339,7 @@ export async function runExtraction(opts = {}) {
     );
   }
 
-  return { files: files.length, types: allTypes.length, out: OUT_DIR, src: srcDir, mount };
+  return { files: files.length, types: allTypes.length, out: OUT_DIR, src: srcDir, mount, parser: USE_AST ? 'tree-sitter' : 'regex' };
 }
 
 // Run when invoked directly (`node tools/extract.mjs`), stay quiet when imported.
