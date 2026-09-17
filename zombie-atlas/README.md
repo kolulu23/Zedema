@@ -545,11 +545,13 @@ sh tools/pw.sh node tools/test/runner.mjs --spec treemap
 ```
 
 - `npm run dev` keeps the atlas in step with the tree: it generates the bundle
-  when the server starts and regenerates it (about 6.5 s for all 3,078 files,
-  debounced to 400 ms) whenever a `.java` file under the source directory is
-  added, changed or removed, then triggers a browser reload. Re-extraction runs
-  in the Vite process, so nothing else needs to be running. Set
-  `ZOMBIE_ATLAS_SKIP_DATA=1` to disable both the generation and the watcher.
+  when the server starts and regenerates it (about 12 s for all 3,078 files with
+  the reference layer, 6.5 s without it, debounced to 400 ms) whenever a `.java`
+  file under the source directory is added, changed or removed, then triggers a
+  browser reload. Re-extraction runs in the Vite process, so nothing else needs
+  to be running. Set `ZOMBIE_ATLAS_SKIP_DATA=1` to disable both the generation
+  and the watcher, or `ZOMBIE_ATLAS_SKIP_REFS=1` to keep the loop at 6.5 s while
+  editing the tree.
 
 - For a plain static host, copy `dist/` and make sure whatever serves it also
   exposes the source tree at `/src/<mount>/**` (mount = the source directory's
