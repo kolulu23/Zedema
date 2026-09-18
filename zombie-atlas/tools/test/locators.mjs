@@ -167,6 +167,16 @@ export const refsSection = (page) => page.locator(`${sel.inspectorBody} [data-re
 /** Rows inside the References section (one per referenced member). */
 export const refsRows = (page) => page.locator(`${sel.inspectorBody} [data-refs="row"]`);
 
+/* ------------------------------------------------------- dependencies ----- */
+
+/** The caret that expands one class pair into its member-level edges. */
+export const memberEdgeCaret = (page) => page.locator(`${sel.pane.dependencies} .edge-item .caret`);
+/** The member-level rows revealed by that caret. */
+export const memberEdgeRows = (page) => page.locator(`${sel.pane.dependencies} .member-edges .link`);
+/** One insight card, located by its heading. */
+export const insightCardNamed = (page, title) =>
+  page.locator(`${sel.pane.insights} .card`).filter({ has: page.locator('h3', { hasText: title }) });
+
 /* ---------------------------------------------------------------- modal -- */
 
 export const helpButton = (page) => page.locator(sel.helpButton);

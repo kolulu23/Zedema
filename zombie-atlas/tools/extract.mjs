@@ -208,15 +208,19 @@ export async function runExtraction(opts = {}) {
   const { parser: astParser, versions } = await initJavaParser();
   const refsByPath = new Map();
   const sitesByPath = new Map();
+  const flowByPath = new Map();
   const parseErrorFiles = [];
   const allTypes = [];
   const fileRecords = [];
   for (const f of files) {
     try {
       const rel = `${MOUNT()}/${path.relative(SRC_DIR(), f).split(path.sep).join('/')}`;
-      const { types, file, refs, sites } = parseJavaFileWith(astParser, f, rel, AST_OPTIONS);
+      const { types, file, refs, sites, flow } = parseJavaFileWith(astParser, f, rel, AST_OPTIONS);
       refsByPath.set(file.path, refs);
-      if (sites) sitesByPath.set(file.path, sites);
+      if (sites) {
+        sitesByPath.set(file.path, sites);
+        flowByPath.set(file.path, flow);
+      }
       if (file.parseErrors) parseErrorFiles.push(file.path);
       fileRecords.push(file);
       for (const t of types) allTypes.push(t);
@@ -478,14 +482,16 @@ export async function runExtraction(opts = {}) {
   // Sites were collected symbolically while each file was parsed; now that every
   // type has an id and its supertypes are resolved, they can be pinned down.
   const references = SKIP_REFS
-    ? { counts: null, byShape: null, perClass: new Map() }
-    : buildReferences({ allTypes, sitesByPath, resolveRef });
-  const refSummary = SKIP_REFS ? { classRows: [], rankings: {} } : summarise(allTypes, references.perClass);
+    ? { counts: null, byShape: null, perClass: new Map(), chains: null }
+    : buildReferences({ allTypes, sitesByPath, flowByPath, resolveRef });
+  const refSummary = SKIP_REFS ? { classRows: [], rankings: {} } : summarise(allTypes, references.perClass, references.chains);
   if (!QUIET && !SKIP_REFS) {
     const c = references.counts;
     process.stderr.write(
       `[extract] ${c.sites} sites (${c.call} calls, ${c.read} reads, ${c.write} writes, ${c.new} creations): ` +
-        `${c.resolved} resolved to a member, ${c.classOnly} to a class only, ${c.unresolved} unresolved\n`
+        `${c.resolved} resolved to a member, ${c.classOnly} to a class only, ${c.unresolved} unresolved\n` +
+        `[extract] flow: ${c.flow.paramStores} parameter stores, ${c.flow.returns} returns, ${c.flow.registers} callback registrations; ` +
+        `${c.chains.sites} chains\n`
     );
   }
 
@@ -722,7 +728,7 @@ export async function runExtraction(opts = {}) {
   for (const [slug, payload] of membersByPkg) write(`members/${slug}.json`, payload);
 
   // refs/<slug>.json : per member, the rows out of it and into it
-  const REF_COLS = ['line', 'kind', 'name', 'out', 'in'];
+  const REF_COLS = ['line', 'kind', 'name', 'out', 'in', 'flow'];
   const refCounts = { classes: 0, members: 0, rows: 0 };
   for (const t of allTypes) {
     const byLine = references.perClass.get(t.id);
@@ -733,12 +739,21 @@ export async function runExtraction(opts = {}) {
     const members = [];
     for (const [line, entry] of [...byLine.entries()].sort((a, b) => a[0] - b[0])) {
       const member = t.members.find((m) => m.line === line);
+      const f = entry.flow;
+      const flow = f && (f.paramsToFields.size || f.returns.size || f.registers.size)
+        ? {
+            p: [...f.paramsToFields.values()],
+            r: [...f.returns.values()],
+            g: [...f.registers.values()],
+          }
+        : null;
       members.push([
         line,
         member ? (member.k === 'field' ? 'field' : 'method') : 'synthetic',
         member ? member.name : '?',
         entry.out.size ? [...entry.out.values()] : null,
         entry.in.size ? [...entry.in.values()] : null,
+        flow,
       ]);
       refCounts.rows += entry.out.size + entry.in.size;
     }
@@ -807,12 +822,27 @@ export async function runExtraction(opts = {}) {
   }
   if (!SKIP_REFS) write('refs/meta.json', {
     version: 1,
-    columns: { shard: REF_COLS, row: ['toClassId', 'toLine', 'kind', 'count', 'lines'] },
+    columns: {
+      shard: REF_COLS,
+      row: ['toClassId', 'toLine', 'kind', 'count', 'lines'],
+      flow: {
+        p: '[parameterIndex, fieldLine] — a parameter stored into a field',
+        r: '[provenance, ref] — what a returned value is; 0 param (ref = index), 1 field (ref = line), 2 local, 3 call, 4 literal, 5 creation, 6 other',
+        g: '[classId, line, argShape] — a callback registered with another member (1 = this, 2 = lambda/method reference)',
+      },
+    },
     kinds: REF_KINDS,
     counts: { ...references.counts, byShape: references.byShape, rows: refCounts.rows, shards: refsByPkg.size },
   });
   if (!SKIP_REFS) {
-    write('refs/summary.json', {
+    if (!SKIP_REFS) {
+    const chains = references.chains;
+    write('refs/chains.json', {
+      histogram: [...chains.depths.entries()].sort((a, b) => a[0] - b[0]),
+      deepest: [...chains.deepest].sort((a, b) => b.path.length - a.path.length).slice(0, 120),
+    });
+  }
+  write('refs/summary.json', {
       columns: ['classId', 'outCalls', 'inCalls', 'outReads', 'inReads', 'outWrites', 'inWrites'],
       classRows: refSummary.classRows,
       rankings: refSummary.rankings,
