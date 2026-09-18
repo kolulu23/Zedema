@@ -87,14 +87,16 @@ function receiverOf(expr, scope) {
       return { shape: 'field', onThis: false, name: field, inner };
     }
     case 'method_invocation': {
-      // `a.b().c()` — keep the chain so resolution can walk return types
+      // `a.b().c()` — the steps *and* the receiver they hang off, so resolution
+      // has somewhere to start: without the base, `b` would be looked up on the
+      // enclosing type and almost every chain would come back unresolved.
       const chain = [];
       let cur = expr;
       while (cur && cur.type === 'method_invocation') {
-        chain.unshift({ name: cur.childForFieldName('name')?.text ?? '', recv: receiverOf(cur.childForFieldName('object'), scope) });
+        chain.unshift({ name: cur.childForFieldName('name')?.text ?? '' });
         cur = cur.childForFieldName('object');
       }
-      return { shape: 'chain', chain };
+      return { shape: 'chain', chain, base: receiverOf(cur, scope) };
     }
     case 'object_creation_expression':
       return { shape: 'type', name: typeTextOf(expr.childForFieldName('type')) };
@@ -118,23 +120,81 @@ function argumentShape(node) {
 }
 
 /**
+ * The field a store writes to, when it is one of *this* type's own fields:
+ * `this.f = …`, or a bare `f = …` whose name is not a local or a parameter.
+ */
+function storedFieldOf(left, scope, params) {
+  if (!left) return null;
+  if (left.type === 'field_access') {
+    const object = left.childForFieldName('object');
+    return object && object.type === 'this' ? left.childForFieldName('field')?.text ?? null : null;
+  }
+  if (left.type === 'identifier') {
+    const name = left.text;
+    if (scope.has(name) || (params && params.includes(name))) return null;
+    return name;
+  }
+  return null;
+}
+
+/** Where a `return` expression's value comes from. */
+function provenanceOf(expr, scope, params) {
+  if (!expr) return { prov: 6, param: -1, field: null };
+  switch (expr.type) {
+    case 'identifier': {
+      const idx = params ? params.indexOf(expr.text) : -1;
+      if (idx >= 0) return { prov: 0, param: idx, field: null };
+      if (scope.has(expr.text)) return { prov: 2, param: -1, field: null };
+      return { prov: 1, param: -1, field: expr.text }; // implicit this field
+    }
+    case 'field_access': {
+      const object = expr.childForFieldName('object');
+      if (object && object.type === 'this') return { prov: 1, param: -1, field: expr.childForFieldName('field')?.text ?? null };
+      return { prov: 6, param: -1, field: null };
+    }
+    case 'method_invocation':
+      return { prov: 3, param: -1, field: null };
+    case 'object_creation_expression':
+      return { prov: 5, param: -1, field: null };
+    case 'string_literal':
+    case 'character_literal':
+    case 'decimal_integer_literal':
+    case 'hex_integer_literal':
+    case 'decimal_floating_point_literal':
+    case 'true':
+    case 'false':
+    case 'null':
+      return { prov: 4, param: -1, field: null };
+    default:
+      return { prov: 6, param: -1, field: null };
+  }
+}
+
+/**
  * Collect every site in a parsed file, symbolically.
  *
+ * `sites` are the reads/writes/calls/creations the reference graph is built
+ * from; `flow` adds the three facts that make a call graph readable as data
+ * flow — a parameter stored into a field, where a returned value comes from,
+ * and (derived later, from the argument shapes) a callback being registered.
+ *
  * @param {import('web-tree-sitter').Node} root
- * @returns {Array<object>} sites, in source order
+ * @returns {{sites: Array<object>, flow: Array<object>}} in source order
  */
 export function collectSites(root) {
   const sites = [];
+  const flow = [];
 
-  const walk = (node, scope) => {
+  const walk = (node, scope, params) => {
     for (const child of node.namedChildren) {
       const type = child.type;
 
       if (type === 'method_declaration' || type === 'constructor_declaration' || type === 'compact_constructor_declaration' || type === 'lambda_expression') {
         const inner = new Map(scope);
-        for (const [name, text] of declaredParams(child)) inner.set(name, text);
+        const paramList = declaredParams(child);
+        for (const [name, text] of paramList) inner.set(name, text);
         const body = child.childForFieldName('body');
-        if (body) walk(body, inner);
+        if (body) walk(body, inner, paramList.map(([name]) => name));
         continue;
       }
 
@@ -151,6 +211,16 @@ export function collectSites(root) {
         const name = child.childForFieldName('name')?.text;
         if (name) scope.set(name, element);
         continue;
+      }
+
+      if (type === 'assignment_expression') {
+        const field = storedFieldOf(child.childForFieldName('left'), scope, params);
+        const right = child.childForFieldName('right');
+        const idx = field && right?.type === 'identifier' && params ? params.indexOf(right.text) : -1;
+        if (field && idx >= 0) flow.push({ k: 0, line: child.startPosition.row + 1, field, param: idx });
+      } else if (type === 'return_statement') {
+        const p = provenanceOf(child.namedChildren[0] ?? null, scope, params);
+        flow.push({ k: 1, line: child.startPosition.row + 1, ...p });
       }
 
       if (type === 'method_invocation') {
@@ -184,13 +254,13 @@ export function collectSites(root) {
       }
 
       if (type !== 'line_comment' && type !== 'block_comment' && type !== 'string_literal' && type !== 'character_literal') {
-        walk(child, scope);
+        walk(child, scope, params);
       }
     }
   };
 
-  walk(root, new Map());
-  return sites;
+  walk(root, new Map(), null);
+  return { sites, flow };
 }
 
 function childForArguments(node) {
@@ -211,7 +281,7 @@ function childForArguments(node) {
  * @param {(ref: string, pkg: string, imports: Array, ownerPath: string) => number|null} ctx.resolveRef
  * @param {Map<string, number>} ctx.importsByPath  file path -> import list (as `fileImports`)
  */
-export function buildReferences({ allTypes, sitesByPath, resolveRef }) {
+export function buildReferences({ allTypes, sitesByPath, flowByPath, resolveRef }) {
   // name -> members, per class; plus the ancestry walk that makes inherited
   // members resolvable (a subclass calling an inherited method is normal code).
   const membersOf = new Map();
@@ -247,18 +317,85 @@ export function buildReferences({ allTypes, sitesByPath, resolveRef }) {
     return null;
   };
 
+  /** `Text` -> class id, through the extractor's own resolution rules. */
+  const asClass = (text, owner) => {
+    if (!text) return null;
+    const id = resolveRef(text, owner.package, owner.fileImports, owner.path);
+    return id === null || id === undefined ? null : id;
+  };
+
   const counts = { sites: 0, call: 0, read: 0, write: 0, new: 0, resolved: 0, classOnly: 0, unresolved: 0 };
   const byShape = Object.fromEntries(RECV_SHAPES.map((s) => [s, 0]));
-  /** classId -> Map(memberLine -> { out: Map, in: Map }) */
+  const flowCounts = { paramStores: 0, returns: 0, registers: 0 };
+  /** classId -> Map(memberLine -> { out: Map, in: Map, flow: object }) */
   const perClass = new Map();
-  const memberUsers = new Map(); // "classId:line" -> { in: Map, out: Map }
+  /** call chains, by resolved depth */
+  const chainDepths = new Map();
+  const deepest = [];
 
   const bucket = (classId, line) => {
     let byLine = perClass.get(classId);
     if (!byLine) perClass.set(classId, (byLine = new Map()));
     let entry = byLine.get(line);
-    if (!entry) byLine.set(line, (entry = { out: new Map(), in: new Map() }));
+    if (!entry) byLine.set(line, (entry = { out: new Map(), in: new Map(), flow: { paramsToFields: new Map(), returns: new Map(), registers: new Map() } }));
     return entry;
+  };
+
+  /** The innermost member of `t` whose span contains a line. */
+  const ownerLineOf = (t, line) => {
+    let ownerLine = -1;
+    for (const m of t.members) {
+      if (line >= m.line && line <= m.line + Math.max(m.bodyLines ?? 0, 0)) {
+        if (ownerLine < 0 || m.line > ownerLine) ownerLine = m.line;
+      }
+    }
+    return ownerLine;
+  };
+
+  /** The class a chain's base receiver is typed as, or null. */
+  const baseClassOf = (base, ownerId, owner) => {
+    if (!base) return null;
+    switch (base.shape) {
+      case 'this':
+        return ownerId;
+      case 'local':
+        return asClass(base.typeText, owner);
+      case 'type':
+        return asClass(base.name, owner);
+      case 'field': {
+        if (!base.onThis) return null;
+        const hit = findMember(ownerId, base.name);
+        return hit ? asClass(hit.member.type || '', owner) : null;
+      }
+      case 'none':
+        return ownerId;
+      default:
+        return null;
+    }
+  };
+
+  /**
+   * The resolved steps of a receiver chain (`a.b().c()`), each with the name it
+   * was written as, so a chain can be shown without loading member shards.
+   */
+  const chainPathOf = (recv, ownerId, owner) => {
+    const path = [];
+    let current = baseClassOf(recv.base, ownerId, owner);
+    if (current === null) return path;
+    for (const step of recv.chain) {
+      const hit = findMember(current, step.name);
+      if (!hit) break;
+      path.push([hit.classId, hit.member.line, hit.member.name]);
+      current = asClass(hit.member.type || '', owner) ?? hit.classId;
+    }
+    return path;
+  };
+  /** The same walk, for `resolveSite`, returning the last resolved step. */
+  const chainTargetOf = (recv, owner) => {
+    const path = chainPathOf(recv, owner.id, owner);
+    if (!path.length) return null;
+    const last = path[path.length - 1];
+    return { classId: last[0], memberLine: last[1] };
   };
 
   const addRow = (map, toClass, toLine, kind, line) => {
@@ -278,15 +415,19 @@ export function buildReferences({ allTypes, sitesByPath, resolveRef }) {
       counts[REF_KINDS[site.k]]++;
       byShape[site.recv.shape] = (byShape[site.recv.shape] ?? 0) + 1;
 
-      // which member of this type contains the site?
-      let ownerLine = -1;
-      for (const m of t.members) {
-        if (site.line >= m.line && site.line <= m.line + Math.max(m.bodyLines ?? 0, 0)) {
-          if (ownerLine < 0 || m.line > ownerLine) ownerLine = m.line;
+      const ownerLine = ownerLineOf(t, site.line);
+
+      // A receiver chain is also a chain: resolve its steps and remember how
+      // deep the resolved part goes.
+      if (site.recv.shape === 'chain') {
+        const path = chainPathOf(site.recv, t.id, t);
+        chainDepths.set(path.length, (chainDepths.get(path.length) ?? 0) + 1);
+        if (path.length >= 2 && ownerLine >= 0 && deepest.length < 400) {
+          deepest.push({ from: [t.id, ownerLine], line: site.line, path });
         }
       }
 
-      const target = resolveSite(site, t, { allTypes, resolveRef, findMember, ancestors });
+      const target = resolveSite(site, t, { allTypes, resolveRef, findMember, ancestors, asClass, chainTargetOf });
       if (!target) {
         counts.unresolved++;
         continue;
@@ -297,25 +438,56 @@ export function buildReferences({ allTypes, sitesByPath, resolveRef }) {
         // the mirror row, so a member can list who touches it
         const other = bucket(target.classId, target.memberLine);
         addRow(other.in, t.id, ownerLine, site.k, site.line);
+        // a `this` or lambda handed to another member is a callback being
+        // registered: the callee will run it later, off this call stack.
+        for (const arg of site.args ?? []) {
+          if (arg !== 1 && arg !== 2) continue;
+          own.flow.registers.set(`${target.classId}:${target.memberLine}:${arg}`, [target.classId, target.memberLine, arg]);
+          flowCounts.registers++;
+        }
       }
       if (target.memberLine >= 0) counts.resolved++;
       else counts.classOnly++;
     }
   }
 
-  return { counts, byShape, perClass };
+  // ---- data flow: a parameter stored into a field, and what a method returns
+  for (const t of allTypes) {
+    const records = flowByPath?.get(t.path);
+    if (!records) continue;
+    for (const rec of records) {
+      const ownerLine = ownerLineOf(t, rec.line);
+      if (ownerLine < 0) continue;
+      const own = bucket(t.id, ownerLine);
+      if (rec.k === 0) {
+        const hit = findMember(t.id, rec.field);
+        const fieldLine = hit ? hit.member.line : -1;
+        own.flow.paramsToFields.set(`${rec.param}:${fieldLine}`, [rec.param, fieldLine]);
+        flowCounts.paramStores++;
+      } else {
+        let ref = -1;
+        if (rec.prov === 0) ref = rec.param;
+        else if (rec.prov === 1 && rec.field) {
+          const hit = findMember(t.id, rec.field);
+          ref = hit ? hit.member.line : -1;
+        }
+        own.flow.returns.set(`${rec.prov}:${ref}`, [rec.prov, ref]);
+        flowCounts.returns++;
+      }
+    }
+  }
+
+  counts.flow = flowCounts;
+  counts.chains = { sites: [...chainDepths.values()].reduce((a, b) => a + b, 0), deepest: deepest.length };
+  return { counts, byShape, perClass, chains: { depths: chainDepths, deepest } };
 }
 
 /** Resolve one site to `{ classId, memberLine }`, or null when it cannot be typed. */
 function resolveSite(site, owner, ctx) {
-  const { allTypes, resolveRef, findMember, ancestors } = ctx;
+  const { allTypes, findMember, chainTargetOf } = ctx;
   const recv = site.recv;
 
-  const asClass = (text) => {
-    if (!text) return null;
-    const id = resolveRef(text, owner.package, owner.fileImports, owner.path);
-    return id === null || id === undefined ? null : id;
-  };
+  const asClass = (text) => ctx.asClass(text, owner);
 
   let classId = null;
   switch (recv.shape) {
@@ -346,15 +518,7 @@ function resolveSite(site, owner, ctx) {
       break;
     case 'chain': {
       // walk the chain: each step's declared return type types the next receiver
-      let current = null;
-      for (const step of recv.chain) {
-        const stepOwner = current ?? owner.id;
-        const hit = findMember(stepOwner, step.name);
-        if (!hit) return current === null ? null : { classId: current, memberLine: -1 };
-        if (step === recv.chain[recv.chain.length - 1]) return { classId: hit.classId, memberLine: hit.member.line };
-        current = asClass(hit.member.type || '') ?? hit.classId;
-      }
-      break;
+      return chainTargetOf(recv, owner);
     }
     default:
       return null;
@@ -388,7 +552,7 @@ function resolveSite(site, owner, ctx) {
  * Per-class aggregates and the rankings the insights cards read. Kept small so
  * it can be loaded eagerly; the member rows stay in the per-package shards.
  */
-export function summarise(allTypes, perClass) {
+export function summarise(allTypes, perClass, chains) {
   const classRows = [];
   const memberTotal = new Map();
   const rankings = { topCalled: [], topCallers: [], topWritten: [], topRead: [] };
@@ -418,21 +582,30 @@ export function summarise(allTypes, perClass) {
         inReads += inR;
         outWrites += outW;
         inWrites += inW;
-        memberTotal.set(`${t.id}:${line}`, { classId: t.id, line, inCalls, outCalls, inWrites, inReads });
-        if (inCalls) called.push([t.id, line, inCalls]);
-        if (inWrites) written.push([t.id, line, inWrites]);
-        if (inReads) read.push([t.id, line, inReads]);
+        // the member's name rides along, so a ranking row can be rendered
+        // without fetching that package's member shard
+        const member = t.members.find((m) => m.line === line);
+        const name = member?.name ?? '?';
+        memberTotal.set(`${t.id}:${line}`, { classId: t.id, line, name, inCalls, outCalls, inWrites, inReads });
+        if (inCalls) called.push([t.id, line, inCalls, name]);
+        if (inWrites) written.push([t.id, line, inWrites, name]);
+        if (inReads) read.push([t.id, line, inReads, name]);
       }
     }
     classRows.push([t.id, out, inc, outReads, inReads, outWrites, inWrites]);
   }
 
   const top = (rows, n = 40) => rows.sort((a, b) => b[2] - a[2]).slice(0, n);
-  const byOutCalls = [...memberTotal.values()].filter((v) => v.outCalls).map((v) => [v.classId, v.line, v.outCalls]);
+  const byOutCalls = [...memberTotal.values()].filter((v) => v.outCalls).map((v) => [v.classId, v.line, v.outCalls, v.name]);
   rankings.topCalled = top(called);
   rankings.topCallers = top(byOutCalls);
   rankings.topWritten = top(written);
   rankings.topRead = top(read);
 
+  if (chains) {
+    rankings.topChains = [...chains.deepest]
+      .sort((a, b) => b.path.length - a.path.length || a.line - b.line)
+      .slice(0, 40);
+  }
   return { classRows, rankings };
 }

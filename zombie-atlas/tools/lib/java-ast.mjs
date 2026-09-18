@@ -487,6 +487,7 @@ export function parseJavaFileWith(parser, absPath, relPath, opts = {}) {
 }
 
 function extractFile(tree, src, rel, opts) {
+  const collected = opts.references ? collectSites(tree.rootNode) : { sites: null, flow: null };
   const root = tree.rootNode;
   const comments = root.descendantsOfType(['line_comment', 'block_comment']);
   const table = lineTable(src, comments);
@@ -584,7 +585,8 @@ function extractFile(tree, src, rel, opts) {
   return {
     types,
     refs,
-    sites: opts.references ? collectSites(root) : null,
+    sites: opts.references ? collected.sites : null,
+    flow: opts.references ? collected.flow : null,
     file: {
       path: rel,
       pkg,

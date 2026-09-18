@@ -381,6 +381,12 @@ function membersBlock(members: MemberRec[]): HTMLElement {
   return h('div', {}, h('h3', {}, msg("Members "), count, input), body);
 }
 
+/** The name of a member of `c` declared at `line`, when the shard is loaded. */
+function fieldNameOf(c: ClassRec, line: number): string | null {
+  if (line < 0) return null;
+  return (memberCache.get(c.id) ?? []).find((m) => m.line === line)?.name ?? null;
+}
+
 function totalRows(rows: RefRow[] | null | undefined): number {
   return (rows ?? []).reduce((a, r) => a + r[3], 0);
 }
@@ -451,6 +457,53 @@ function refsSection(c: ClassRec, refs: Map<number, MemberRefs> | null): HTMLEle
   group(1, msg("Reads"));
   group(2, msg("Writes"));
 
+  // ---- data flow: what the members store, return and hand to other code ----
+  const flowRows: [string, string][] = [];
+  for (const m of refs.values()) {
+    const flow = m.flow;
+    if (!flow) continue;
+    for (const [param, fieldLine] of flow.p ?? []) {
+      const field = fieldNameOf(c, fieldLine);
+      flowRows.push([
+        `${m.name}`,
+        field ? msg("stores parameter {0} into {1}", param, field) : msg("stores parameter {0} into a field", param),
+      ]);
+    }
+    for (const [prov, ref] of flow.r ?? []) {
+      const where =
+        prov === 0 ? msg("parameter {0}", ref)
+        : prov === 1 ? (fieldNameOf(c, ref) ? msg("field {0}", fieldNameOf(c, ref)!) : msg("a field"))
+        : prov === 2 ? msg("a local")
+        : prov === 3 ? msg("a call result")
+        : prov === 4 ? msg("a literal")
+        : prov === 5 ? msg("a new object")
+        : msg("an expression");
+      flowRows.push([m.name, msg("returns {0}", where)]);
+    }
+    for (const [toClass, toLine, shape] of flow.g ?? []) {
+      const target = atlas!.byId[toClass];
+      const member = (memberCache.get(toClass) ?? []).find((mm) => mm.line === toLine);
+      const where = target ? `${target.name}${member ? `.${member.name}` : ''}` : '?';
+      flowRows.push([m.name, shape === 1 ? msg("registers itself with {0}", where) : msg("registers a callback with {0}", where)]);
+    }
+  }
+  if (flowRows.length) {
+    wrap.append(h('h3', { style: { marginTop: '8px' }, text: msg("Data flow ({0})", flowRows.length) }));
+    const list = h('div', { class: 'link-list' });
+    for (const [member, text] of flowRows.slice(0, 14)) {
+      list.append(
+        h(
+          'div',
+          { class: 'link', title: text },
+          h('span', { class: 'nm', text: member }),
+          h('span', { class: 'sub', text })
+        )
+      );
+    }
+    if (flowRows.length > 14) list.append(h('div', { class: 'empty', text: msg("… and {0} more", flowRows.length - 14) }));
+    wrap.append(list);
+  }
+
   // incoming, by the members of this type that are referenced
   const busiest = [...inRows.entries()].sort((a, b) => totalRows([...b[1].values()]) - totalRows([...a[1].values()])).slice(0, 10);
   if (busiest.length) {
@@ -485,7 +538,7 @@ function refsSection(c: ClassRec, refs: Map<number, MemberRefs> | null): HTMLEle
         class: 'empty',
         style: { marginTop: '6px' },
         text: msg(
-          "A site is one call, read, write or creation in the source. {0} resolved to a class but not to a member, {1} could not be typed at all — counted, never guessed, so the lists above are a lower bound.",
+          "{0} sites resolved at class level, {1} sites could not be typed",
           fmtInt(refCounts.classOnly),
           fmtInt(refCounts.unresolved)
         ),
