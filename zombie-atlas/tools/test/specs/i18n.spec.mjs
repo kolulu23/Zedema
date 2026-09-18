@@ -148,16 +148,15 @@ export default {
       return ZH.sourceHeading;
     });
 
-    // Regression guard: the member filter re-renders the panel on every
-    // keystroke, and the input must keep focus across that re-render.
+    // Regression guard: filtering repaints the member list, and the input must
+    // keep both its value and its focus while that happens — in the translated
+    // UI as much as in English.
     await t.test('the member filter works in Chinese and keeps focus', async () => {
       await memberFilter(page).fill('get');
-      // The panel re-renders on every keystroke; the input must survive it with
-      // both its value and its focus.
       await memberFilter(page).waitFor({ timeout: 15000 });
       await page.waitForFunction(() => document.activeElement?.id === 'member-filter', null, { timeout: 15000 });
       t.assert.equal(await memberFilter(page).inputValue(), 'get', 'the query was lost');
-      return 'focus retained across re-render';
+      return 'focus retained across the repaint';
     });
 
     await t.test('exported type kinds stay language-neutral', async () => {

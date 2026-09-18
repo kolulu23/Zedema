@@ -50,14 +50,12 @@ environment variables that plugin reads.
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `npm install`                      | Install dependencies.                                                                                                          |
 | `npm run data`                     | Regenerate the JSON bundle into `dist/data/` (`node tools/extract.mjs`).                                                       |
-| `npm run validate`                 | Independently cross-check the generated bundle against the raw source.                                                         |
-| `npm run parity`                   | Re-walk the tree and compare counts and digests against the recorded parser snapshot (drift gate).                             |
 | `npm run build`                    | `vite build` — bundles the app, then writes `dist/data/` from the plugin's `closeBundle` hook.                                 |
 | `npm run dev`                      | `vite` — dev server on port 5183; generates the bundle on startup and regenerates it when the tree changes.                    |
 | `npm run serve`                    | Serve the existing `dist/` plus the raw sources at http://127.0.0.1:5184/.                                                     |
 | `npm start`                        | `npm run build` followed by `node tools/serve.mjs`.                                                                            |
 | `npm run typecheck`                | `tsc --noEmit`.                                                                                                                |
-| `npm test`                         | `npm run validate`, then the unit tests, then the browser suite.                                                               |
+| `npm test`                         | The unit tests, then the browser suite.                                                                                        |
 | `npm run test:unit`                | Pure Node tests: locale catalogs, no browser or dataset needed.                                                                |
 | `npm run test:browser`             | The browser suite. Starts its own server on a free port, unless `--port` names one — or `--url` names an external deployment, in which case nothing local is started. |
 | `npm run test:shots`               | The browser suite, also writing screenshots to `.pw-shots/`.                                                                   |
@@ -72,6 +70,7 @@ Extra flags accepted by `tools/build.mjs`:
 | `--skip-data` | Reuse the existing `dist/data/` bundle (UI-only rebuild, ~0.2 s).    |
 | `--src <dir>` | Decompile tree to read (overrides `ZOMBIE_SRC`).                     |
 | `--pretty`    | Indent the emitted JSON (larger, easier to diff by hand).            |
+| `--no-refs`   | Skip the fine-grained reference layer (`refs/**`, ~13 MB).            |
 
 ### Pointing at your source tree
 
@@ -124,7 +123,7 @@ The whole dataset is produced by one extractor, `tools/extract.mjs` (`npm run da
    - member type references (return and parameter types) resolved through the same-package index and the file's imports.
 7. **Aggregate.** The nested package tree is built bottom-up with per-node metrics, own types and subtree type lists; functional domains are derived from the second package segment (55 domains under `zombie.`); fan-in, fan-out and per-domain hub types are computed.
 8. **Emit.** The JSON bundle lands in `dist/data/` (see [Data bundle reference](#data-bundle-reference)). The `zombie-atlas-data` plugin runs this step from Vite's `closeBundle` hook — after the app has been written and after `emptyOutDir` — and from the dev server's startup and file watcher, so one tool owns the whole pipeline. `insights.json` precomputes the rankings and histograms the UI would otherwise have to scan the whole member space for.
-9. **Verify.** `tools/validate.mjs` re-checks the result against the raw source with an independent scanner (see [Validation](#validation)), and `npm run parity` re-walks the tree and compares counts and digests against a recorded snapshot, so a grammar bump or an accidental change cannot move figures quietly. [docs/parser-parity.md](docs/parser-parity.md) records what the tree-sitter swap changed and why.
+9. **Emit and check.** The bundle is written, the unit tests cover the pure modules and the browser suite drives the built app. [docs/parser-parity.md](docs/parser-parity.md) records what the tree-sitter swap changed, with the measured count and cause of every correction.
 
 Metrics recorded per type (their meaning is echoed in `meta.json` so the bundle is self-describing):
 
@@ -215,8 +214,24 @@ Twelve cards computed at extraction time and served from `insights.json`.
   **Clear filters** and **Reset view** buttons instead of a blank canvas.
 - **Most complex methods** (togglable between complexity, branch count and body lines), **Largest types**, **Most depended-upon (fan-in)**, **Biggest reusers (fan-out)**, **Highest branch density**, **Most annotated methods** (the largest `@UsedFromLua` surface per type) and **Strongest package coupling** — each ranking row selects the type (or jumps to the package pair in the Dependencies view).
 - Histograms of declaration kinds, stereotypes, annotations and largest packages, plus a **Scale** card listing the bundle's headline counts.
+- Four cards come from the reference layer when the bundle carries it (they are appended, so the cards above keep their positions): **Most-called methods** and **Most-written fields** rank members by incoming references, **Deepest call chains** shows the longest resolved chains as `Type.m → Type.n → …` deduplicated by shape, and **Reference coverage** reports how much of the call graph could be typed — resolved, class-only and unresolved, with the receiver-shape histogram and the flow counts. A `--no-refs` bundle renders the twelve cards it always had.
 
-The right-hand **inspector** is shared by every view: it shows the project overview when nothing is selected, and for a type it lists the badges (kind, Lua API status), metrics, the internal superclass chain, direct subtypes, the full member list with a filter, and the "depends on" / "used by" neighbours, with buttons to open the source, show the type in the hierarchy or copy the fully-qualified name. For a package it shows the package metrics, its sub-packages, and the types it declares (largest first, capped at 60) with buttons to zoom the treemap there or clear the filters.
+**The source viewer colourises with the grammar.** Opening a file parses it with
+the same `tree-sitter-java` grammar that extracted the bundle, so comments and
+literals can never be mistaken for code and an unknown construct is visibly
+uncoloured rather than silently wrong. That parser is a lazy chunk: `web-tree-
+sitter` and the grammar's 415 KB `.wasm` are fetched the first time a viewer
+opens, never at startup, and one file is parsed per open (~1 ms), so it runs on
+the main thread. If the asset cannot be fetched the viewer falls back to plain
+escaped text. The runtime and grammar wasm are emitted by the
+`zombie-atlas-parser-assets` plugin in `vite.config.ts` (grammar under `/ts/`,
+the runtime next to the chunk that loads it).
+
+The right-hand **inspector** is shared by every view: it shows the project overview when nothing is selected, and for a type it lists the badges (kind, Lua API status), metrics, the internal superclass chain, direct subtypes, the full member list with a filter, and the "depends on" / "used by" neighbours, with buttons to open the source, show the type in the hierarchy or copy the fully-qualified name.
+
+When the bundle carries the reference layer, the inspector adds a **References** section for the selected type and a `→n ←n` badge on each member row. The section lists what the type's members call, read and write (with counts and the first source line, each row jumping to the target type), then which members are referenced most and by whom. It also publishes its own confidence — the resolved share, tree-wide — and states how many sites resolved to a class only or not at all, because a receiver the analysis cannot type is counted rather than guessed. A **Data flow** block lists what the members do with their values: a parameter stored into a field, what a returned value comes from, and callbacks registered with another member (`registers itself with IsoGameCharacter.addOnDiedListener`). A bundle built with `--no-refs` shows none of this and behaves exactly as before.
+
+For a package the inspector shows the package metrics, its sub-packages, and the types it declares (largest first, capped at 60) with buttons to zoom the treemap there or clear the filters.
 
 ## Customising the map
 
@@ -321,30 +336,22 @@ the current build and drift slightly with each regeneration.
 | `deps-packages.json`  | ~202 KB                   | 4,096 `[from, to, weight]` package edges, heaviest first.                                                                                                                                                                                            |
 | `deps-classes.json`   | ~408 KB                   | Class-to-class edges, loaded lazily when a class-level edge list is requested.                                                                                                                                                                       |
 | `insights.json`       | ~41 KB                    | Top methods by complexity (with body line and branch counts), the rankings, the histograms and the package-coupling table.                                                                                                                           |
-| `members/<slug>.json` | 266 shards, ~9.7 MB total | Per-package member lists keyed by class id (methods with parameters, throws, modifiers, annotations, line, complexity, body lines and javadoc, plus fields and enum constants). Loaded on demand; the slug is the package with `.` replaced by `__`. |
+| `members/<slug>.json` | 266 shards, ~10 MB total | Per-package member lists keyed by class id (methods with parameters, throws, modifiers, annotations, line, complexity, body lines and javadoc, plus fields and enum constants). Loaded on demand; the slug is the package with `.` replaced by `__`. |
+| `refs/meta.json` | ~1 KB | The reference layer's counts and resolution report: sites by kind, resolved / class-only / unresolved, receiver shapes, row and shard totals. Its absence is how the app knows the bundle was built with `--no-refs`. |
+| `refs/summary.json` | ~230 KB | Per-class aggregates `[id, outCalls, inCalls, outReads, inReads, outWrites, inWrites]` plus the rankings the insights cards read (most-called members, most-written fields, …). |
+| `refs/<slug>.json` | 263 shards, ~15 MB total | Per-member rows: what a member calls/reads/writes (`out`), who calls/reads/writes it (`in`), and a `flow` block. Rows are `[classId, line, kind, count, [lines]]` where kind is `call`/`read`/`write`/`new` and `line` is `-1` when only the class could be resolved; `flow` is `{p, r, g}` — `p` a parameter stored into a field, `r` what a returned value is, `g` a callback handed to another member. Sharded and loaded exactly like the member lists. |
+| `refs/chains.json` | ~70 KB | Resolved chains: a depth histogram plus the 120 deepest, each `{from, line, path}` with one `[classId, line, name]` per step. |
 
-The bundle is about 11.5 MB in total: roughly 1.7 MB of JSON loaded eagerly and 9.7 MB of member shards fetched on demand.
+The bundle is about 27 MB in total: roughly 1.9 MB of JSON loaded eagerly and 25 MB of shards fetched on demand (member lists plus the reference layer). The reference shards are an order of magnitude more rows than the class graph — 456,920 member-to-member edges from 2.5 M sites — so they are the reason `npm run data -- --no-refs` exists: it writes the bundle without `refs/**` (12 MB) and every reference surface simply hides itself.
 
-## Validation
+## Verification
 
-`npm run validate` (`node tools/validate.mjs`, plus `--verbose`) deliberately does **not** reuse the extractor's parser: it re-reads the raw tree with independent, naive regexes and compares the result with the generated bundle, reporting discrepancies per file so a parser regression is visible instead of silent. That independence is why it stayed meaningful across the move to tree-sitter.
-
-```
-{
-  "filesChecked": 3078,
-  "types": { "parsed": 4749, "naive": 4749 },
-  "methods": { "parsed": 49645, "naive": 46533 },
-  "heritage": { "checked": 2239, "resolved": 2046, "external": 187, "internalCoverage": "99.7%" },
-  "membersTotal": 96257,
-  "nestedDeclarationsSkipped": 278,
-  "problemCount": 6
-}
-```
-
-- **Types.** 4,749 parsed against 4,749 found by the naive scan — an exact match, with zero `[type-miss]` entries.
-- **Methods.** The parser records 49,645 callable declarations (methods plus constructors) against the naive scan's 46,533. The parser finds more because the naive regex requires leading modifiers and a single line, so it misses constructors of interfaces and records, interface methods without modifiers, and multi-line signatures. Declarations that live inside another member's body (anonymous and local classes) are counted separately as `nestedDeclarationsSkipped` (278) rather than reported as misses.
-- **Heritage.** Of 2,239 `extends`/`implements` clauses checked, 2,046 resolve to types inside the tree and 187 point at external JDK/Kahlua types (`RuntimeException`, `Thread`, `ArrayList`, `Iterator`, `JavaFunction`, …) — an internal coverage of 99.7%. The move to tree-sitter removed five of the previous eleven ambiguous lines, because the validator matches a heritage clause to its declaring record by declaration line and that line is now the real one. The remaining six are the same class of ambiguity — a simple name re-declared inside one file, for example `AttributeInstance`'s nested `Enum`/`EnumSet`/`EnumStringSet` extending the outer generic type — and each was inspected by hand and resolves correctly in the shipped bundle.
-- **Exit code.** The tool exits non-zero when discrepancies exceed 5% of the files checked, and prints the first 40 of them (`--verbose` prints all). Because the naive scanner raises far more false alarms than the parser has real misses, read the per-file lines rather than the exit status: it is a smoke alarm on the parser, not a clean bill of health for the scanner.
+The parser swap was checked against the source with an independent scanner while
+both parsers existed; that scanner and the harness that ran them are gone, and
+the findings are recorded in [docs/parser-parity.md](docs/parser-parity.md).
+New verification is planned; for now the guarantees are the test layers below,
+the fact that the bundle is a pure function of the source, and `git diff` on a
+regenerated `dist/data` when a change is meant to move figures.
 
 ### Test suite
 
@@ -352,8 +359,7 @@ Three layers, cheapest first:
 
 | Layer | Command | Covers |
 | ----- | ------- | ------ |
-| Bundle validation | `npm run validate` | The extracted JSON checked against the raw tree (see above). |
-| Unit tests | `npm run test:unit` | The settings schema and codec, the permalink round trip, filtering and search, the Java highlighter, the locale catalogs. No browser, no dataset — ~80 cases in about a tenth of a second. |
+| Unit tests | `npm run test:unit` | The settings schema and codec, the permalink round trip, filtering and search, the locale catalogs. No browser, no dataset — about 80 cases in a tenth of a second. |
 | Browser suite | `npm run test:browser` | The built app in headless Chromium: every view, interaction, persistence path and export. |
 
 The unit layer imports the application's TypeScript directly — `node --test` strips the types — so the pure parts of `src/` are tested against the real modules rather than a copy. `tools/test/ts-resolve.mjs` supplies the two things Node needs for that: extension resolution for the Vite-style imports, and enough of a `location`/`localStorage` for `i18n.ts` to load.
@@ -458,7 +464,7 @@ zombie-atlas/
       index.ts            Barrel — the rest of the app imports `./state`
     styles.css            Themes and layout
     views/
-      source/             Source-viewer modal + the Java highlighter (pure, tested)
+      source/             Source-viewer modal + the grammar-driven highlighter
       treemap.ts          Canvas treemap, zoom, labels, tooltip, exports
       hierarchy.ts        Inheritance forest
       dependencies.ts     Force graph, adjacency matrix, class-edge list
@@ -470,10 +476,8 @@ zombie-atlas/
     extract.mjs           The extractor; writes the JSON bundle
     build.mjs             Flag-friendly front-end for Vite (--dev, --skip-data, --src)
     lib/config.mjs        Source/output discovery (ZOMBIE_SRC, --src, .env)
-    validate.mjs          Independent cross-check of the bundle
     serve.mjs             Production server: dist/ plus /src/<mount>/**
     trailer.mjs           Records the showcase trailer (viewport capture + encode)
-    parity.mjs            Parser drift gate; records tools/parity-snapshot.json
     pw.sh                 Runs a command with the bundled Chromium and libraries
     lib/java-ast.mjs      The tree-sitter extractor: one parse per file, then a walk
     lib/java-names.mjs    Type-name normalisation used by the resolver
@@ -516,9 +520,10 @@ node tools/extract.mjs --pretty                  # indented JSON for diffing
 ```
 
 - Node.js with npm is the only build requirement; the pipeline is plain Node ESM
-  and the app has no runtime dependencies beyond the bundled `d3-*` packages.
-- The extractor has exactly two build-time dependencies: `tree-sitter-java`
-  (MIT) and `web-tree-sitter`. The grammar is consumed as the `.wasm` file the
+  and the app's own dependencies are the bundled `d3-*` packages plus the parser
+  the source viewer uses (see below).
+- The extractor has exactly two parser dependencies: `tree-sitter-java` (MIT)
+  and `web-tree-sitter`. The grammar is consumed as the `.wasm` file the
   package ships, its native peer is optional, and no install script needs to run
   — nothing compiles, and no parser code reaches the browser bundle. Where the
   global npm cache is not writable (some sandboxes), install with
@@ -537,11 +542,13 @@ sh tools/pw.sh node tools/test/runner.mjs --spec treemap
 ```
 
 - `npm run dev` keeps the atlas in step with the tree: it generates the bundle
-  when the server starts and regenerates it (about 6.5 s for all 3,078 files,
-  debounced to 400 ms) whenever a `.java` file under the source directory is
-  added, changed or removed, then triggers a browser reload. Re-extraction runs
-  in the Vite process, so nothing else needs to be running. Set
-  `ZOMBIE_ATLAS_SKIP_DATA=1` to disable both the generation and the watcher.
+  when the server starts and regenerates it (about 12 s for all 3,078 files with
+  the reference layer, 6.5 s without it, debounced to 400 ms) whenever a `.java`
+  file under the source directory is added, changed or removed, then triggers a
+  browser reload. Re-extraction runs in the Vite process, so nothing else needs
+  to be running. Set `ZOMBIE_ATLAS_SKIP_DATA=1` to disable both the generation
+  and the watcher, or `ZOMBIE_ATLAS_SKIP_REFS=1` to keep the loop at 6.5 s while
+  editing the tree.
 
 - For a plain static host, copy `dist/` and make sure whatever serves it also
   exposes the source tree at `/src/<mount>/**` (mount = the source directory's
@@ -554,6 +561,6 @@ sh tools/pw.sh node tools/test/runner.mjs --spec treemap
 - **The reference graph approximates coupling.** Edges come from imports, inline fully-qualified references and member type references. Reflection, string-based lookup, Lua and zedscript call sites, and data-driven wiring are invisible; an import creates an edge even when nothing in the file uses it; and a simple name that is genuinely ambiguous is dropped rather than guessed.
 - **Decompiled code contains synthetic constructs.** Generated accessors and bridge methods, `$`-suffixed names and synthetic casts are part of the source the parser reads, so member counts and complexity can include code the original developer never wrote.
 - **Supertypes outside the tree are external.** JDK and Kahlua base types cannot be resolved, so a type inheriting only from an external class appears as a hierarchy root, and heritage validation covers the internal share (99.7% of in-tree references) rather than everything.
-- **The grammar defines what can be seen.** Records are read from `tree-sitter-java`; a file the grammar cannot parse end-to-end is still analysed best-effort and listed in `meta.json` (`parseErrors`) instead of failing the build — currently one file of 3,078 (`zombie/core/CreditsName.java`). Upgrading the grammar is expected to move figures; `npm run parity` fails until the snapshot is re-recorded deliberately.
+- **The grammar defines what can be seen.** Records are read from `tree-sitter-java`; a file the grammar cannot parse end-to-end is still analysed best-effort and listed in `meta.json` (`parseErrors`) instead of failing the build — currently one file of 3,078 (`zombie/core/CreditsName.java`). Upgrading the grammar is expected to move figures, so treat a bundle regeneration after a grammar bump as a change to review.
 - **Display culling and caps.** The treemap hides rectangles below the configured share of the map, and the hierarchy root list renders the first 400 roots (use its filter to reach the rest); the status bar's type count reflects filters, not what is currently drawn.
 - **Byte sizes are spans, not sums.** A type's `bytes` is the UTF-8 size of its source span: the outermost type in a file is charged the whole file (imports, licence header and trailing comments included) and each nested type only its own span, so a file's size is not the sum of the types it declares.

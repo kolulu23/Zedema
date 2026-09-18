@@ -33,6 +33,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { Parser, Language } from 'web-tree-sitter';
 import { MODIFIERS, normalizeTypeRef } from './java-names.mjs';
+import { collectSites, typeTextOf } from './java-refs.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -253,16 +254,6 @@ function heritage(node) {
   const permits = node.namedChildren.find((c) => c.type === 'permits');
   if (permits) for (const t of permits.namedChildren) permitsList.push(t.text.trim());
   return { extends: extendsList, implements: implementsList, permits: permitsList };
-}
-
-/**
- * Normalise a declared type: strip generics/annotations, then close up the
- * spaces an annotation left behind (`GameProfiler.@Nullable ProfileArea` is one
- * qualified name, not two words).
- */
-function typeTextOf(node) {
-  if (!node) return '';
-  return normalizeTypeRef(node.text).replace(/\s*\.\s*/g, '.');
 }
 
 // ---------------------------------------------------------------------------
@@ -496,6 +487,7 @@ export function parseJavaFileWith(parser, absPath, relPath, opts = {}) {
 }
 
 function extractFile(tree, src, rel, opts) {
+  const collected = opts.references ? collectSites(tree.rootNode) : { sites: null, flow: null };
   const root = tree.rootNode;
   const comments = root.descendantsOfType(['line_comment', 'block_comment']);
   const table = lineTable(src, comments);
@@ -593,6 +585,8 @@ function extractFile(tree, src, rel, opts) {
   return {
     types,
     refs,
+    sites: opts.references ? collected.sites : null,
+    flow: opts.references ? collected.flow : null,
     file: {
       path: rel,
       pkg,

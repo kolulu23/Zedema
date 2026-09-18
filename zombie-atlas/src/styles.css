@@ -316,9 +316,21 @@ input[type='checkbox'] { accent-color: var(--accent); }
   margin: 0 0 6px; display: flex; align-items: center; gap: 6px;
 }
 .insp-section h3 .count { color: var(--fg-3); font-family: var(--font-mono); letter-spacing: 0; text-transform: none; }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; }
+/* The reference layer's resolution figure covers the whole tree, so it sits on
+   a line of its own rather than in the section header, where it read as if it
+   were the selected type's score. */
+.refs-total { color: var(--fg-2); font-family: var(--font-mono); font-size: 11px; margin: -2px 0 4px; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; font-size: 12px; }
 .kv dt { color: var(--fg-2); }
-.kv dd { margin: 0; font-family: var(--font-mono); text-align: right; }
+/* Metric values — file paths, modifier lists, fan-in/out — are routinely wider
+   than the panel. `minmax(0, 1fr)` lets the value column shrink below its
+   content, and the value is then clipped on one line instead of wrapping and
+   stretching the panel; `watchOverflowTitles` attaches the full text as a
+   tooltip whenever (and only when) a value is actually clipped. */
+.kv dd {
+  margin: 0; font-family: var(--font-mono); text-align: right;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 .bar-row { display: grid; grid-template-columns: 92px 1fr 52px; gap: 8px; align-items: center; font-size: 11.5px; margin-bottom: 3px; }
 .bar-row .lbl { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -347,7 +359,14 @@ input[type='checkbox'] { accent-color: var(--accent); }
 }
 .link:hover { background: var(--bg-3); }
 .link .nm { color: var(--accent-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link .sub { color: var(--fg-3); margin-left: auto; flex: none; }
+/* The right-hand value is allowed to shrink and ellipsize: some of these rows
+   repeat a long member name ("new VeryLongClassName ×1" in the References
+   list), which is wider than the panel on its own and used to push the row —
+   and its text — out past the inspector's edge. */
+.link .sub {
+  color: var(--fg-3); margin-left: auto;
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .link .kinddot { width: 7px; height: 7px; border-radius: 2px; flex: none; align-self: center; }
 
 .empty { color: var(--fg-3); font-style: italic; }
@@ -438,3 +457,31 @@ kbd {
   :root { --sidebar-w: 232px; --inspector-w: 330px; }
   .search { width: 210px; }
 }
+
+/* Grammar-derived syntax colours: one distinct hue per token class, so the
+   source viewer reads like Java rather than like highlighted text. */
+.src-code .tk-kw { color: var(--accent-2); }
+.src-code .tk-typ { color: var(--accent); }
+.src-code .tk-fn { color: var(--lua); }
+.src-code .tk-str { color: var(--warn); }
+.src-code .tk-num { color: var(--danger); }
+.src-code .tk-lit { color: var(--danger); }
+.src-code .tk-ann { color: var(--lua); }
+.src-code .tk-com { color: var(--fg-2); font-style: italic; }
+
+/* Dependencies: the caret that expands a class pair into member-level edges. */
+.edge-item .caret {
+  flex: none;
+  width: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-3);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.edge-item .caret:hover { color: var(--fg-0); }
+.member-edges { padding-left: 18px; }
+.member-edges .link { border-top: 0; }
+.member-edge-host:empty { display: none; }

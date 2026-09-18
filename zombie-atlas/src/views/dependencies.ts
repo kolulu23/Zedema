@@ -12,7 +12,7 @@ import { msg, trLabel } from '../i18n';
 
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
 import type { SimulationNodeDatum } from 'd3-force';
-import { type Atlas, loadClassDeps } from '../domain';
+import { type Atlas, type ClassRec, REF_KINDS, loadClassDeps, loadRefShard } from '../domain';
 import { store, type AppState, type DepMode } from '../state';
 import { fitText, fmtCompact, fmtInt, h, rgba, sampleRamp, esc } from '../util';
 
@@ -673,6 +673,66 @@ function classEdgePane(state: AppState): HTMLElement {
   return panel;
 }
 
+/**
+ * The member-level edges behind one class pair.
+ *
+ * A class-level edge is a number: 340 references between two types says nothing
+ * about which method calls which. Expanding a row loads both packages'
+ * reference shards and lists the caller/callee pairs, heaviest first. A bundle
+ * without the reference layer says so instead of showing an empty list.
+ */
+function memberEdgesFor(a: ClassRec, b: ClassRec, host: HTMLElement, caret: HTMLButtonElement) {
+  if (host.childElementCount) {
+    host.replaceChildren();
+    caret.textContent = '▸';
+    caret.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  caret.textContent = '▾';
+  caret.setAttribute('aria-expanded', 'true');
+  host.replaceChildren(h('div', { class: 'empty', text: msg("loading member edges…") }));
+  const fail = (message: string) => host.replaceChildren(h('div', { class: 'empty', text: message }));
+
+  Promise.all([loadRefShard('data', a.pkg), loadRefShard('data', b.pkg)])
+    .then(([fromShard, toShard]) => {
+      const fromMembers = fromShard.get(a.id);
+      const toMembers = toShard.get(b.id);
+      if (!fromMembers) return fail(msg("No member-level edges recorded for this pair."));
+      const edges: [string, string, number, number][] = [];
+      for (const member of fromMembers.values()) {
+        for (const row of member.out ?? []) {
+          if (row[0] !== b.id) continue;
+          // The target member is unknown when the reference resolved to the
+          // class only; the kind still says what it was (call/read/write/new).
+          edges.push([member.name, toMembers?.get(row[1])?.name ?? REF_KINDS[row[2]], row[3], row[4]?.[0] ?? 0]);
+        }
+      }
+      if (!edges.length) return fail(msg("No member-level edges recorded for this pair."));
+      edges.sort((x, y) => y[2] - x[2]);
+      const list = h('div', { class: 'link-list member-edges' });
+      for (const [caller, callee, count, line] of edges.slice(0, 40)) {
+        list.append(
+          h(
+            'div',
+            {
+              class: 'link',
+              'data-refs': 'row',
+              title: `${a.fqn}.${caller} → ${b.fqn}.${callee}`,
+              onclick: () =>
+                store.update((s) => {
+                  s.selection.classId = a.id;
+                }),
+            },
+            h('span', { class: 'nm', text: `${caller} → ${callee}` }),
+            h('span', { class: 'sub', text: `×${count}${line ? ` · ${msg("line {0}", line)}` : ''}` })
+          )
+        );
+      }
+      host.replaceChildren(list);
+    })
+    .catch(() => fail(msg("Member-level edges are not in this bundle.")));
+}
+
 /** Load class edges lazily and render the ones between two packages. */
 let classDepsCache: { from: number; to: number; w: number }[] | null = null;
 function classEdgesFor(from: string, to: string): HTMLElement {
@@ -693,20 +753,37 @@ function classEdgesFor(from: string, to: string): HTMLElement {
       const a = atlas!.byId[e.from];
       const b = atlas!.byId[e.to];
       if (!a || !b) continue;
+      const host = h('div', { class: 'member-edge-host' });
+      const caret = h('button', {
+        class: 'caret',
+        'aria-expanded': 'false',
+        title: msg("Show member-level edges"),
+        text: '▸',
+        onclick: (ev: Event) => {
+          ev.stopPropagation();
+          memberEdgesFor(a, b, host, caret);
+        },
+      });
       list.append(
         h(
           'div',
-          {
-            class: 'link',
-            onclick: () =>
-              store.update((s) => {
-                s.selection.classId = a.id;
-              }),
-          },
-          h('span', { class: 'nm', text: a.name }),
-          h('span', { style: { color: 'var(--fg-3)' }, text: ' → ' }),
-          h('span', { class: 'nm', text: b.name }),
-          h('span', { class: 'sub', text: `×${e.w}` })
+          { class: 'edge-item' },
+          h(
+            'div',
+            {
+              class: 'link',
+              onclick: () =>
+                store.update((s) => {
+                  s.selection.classId = a.id;
+                }),
+            },
+            caret,
+            h('span', { class: 'nm', text: a.name }),
+            h('span', { style: { color: 'var(--fg-3)' }, text: ' → ' }),
+            h('span', { class: 'nm', text: b.name }),
+            h('span', { class: 'sub', text: `×${e.w}` })
+          ),
+          host
         )
       );
     }

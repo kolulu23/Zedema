@@ -10,7 +10,7 @@ import { msg, trLabel } from '../i18n';
 
 import { type Atlas, type ClassRec, KIND_NAMES } from '../domain';
 import { store, type AppState } from '../state';
-import { fmtCompact, h } from '../util';
+import { fmtCompact, h, preserveInputFocus } from '../util';
 
 const KIND_COLOR = ['#4e9de0', '#59b39a', '#c9a227', '#b07fd6', '#8d8d8d'];
 const KIND_BADGE = ['C', 'I', 'E', 'R', '@'];
@@ -137,8 +137,9 @@ function sidebarList(): HTMLElement {
         value: filterText,
         oninput: (e: Event) => {
           filterText = (e.target as HTMLInputElement).value;
-          renderHierarchy(store.state);
-          document.querySelector<HTMLInputElement>('#hierarchy-pane #hierarchy-filter')?.focus();
+          // Whole-pane repaint (both the roots list and the tree follow the
+          // filter), so the caret has to be put back explicitly.
+          preserveInputFocus('hierarchy-filter', () => renderHierarchy(store.state));
         },
       })
     ),

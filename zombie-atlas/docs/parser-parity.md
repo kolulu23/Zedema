@@ -8,9 +8,10 @@ verified — the work `tools/parity.mjs` gated while both parsers existed.
 
 ## How it was verified
 
-`tools/parity.mjs` ran both extractors over the same tree and classified every
-disagreement into categories that were either **must match exactly** or
-**intentional corrections with a recorded count**. The run that cleared the swap:
+While both parsers existed, `tools/parity.mjs` ran them over the same tree and
+classified every disagreement into categories that were either **must match
+exactly** or **intentional corrections with a recorded count**. The run that
+cleared the swap:
 
 ```
 parser parity — 3078 files
@@ -31,18 +32,14 @@ parser parity — 3078 files
    acc count-enumConstants 1   acc member-reclassified 1 acc parse-errors 1
 ```
 
-The oracle it used is preserved in history — restore it at any time with:
+Both the scanner and that harness have since been deleted — tree-sitter is the
+only parser, and validation tooling is being redesigned. They remain in history
+if the comparison needs reproducing:
 
 ```bash
-git show 1c8f3b1:zombie-atlas/tools/lib/java-lexer.mjs > tools/lib/java-lexer.mjs
-git show 1c8f3b1:zombie-atlas/tools/parity.mjs      > tools/parity-oracle.mjs
+git show 1c8f3b1:zombie-atlas/tools/lib/java-lexer.mjs > /tmp/java-lexer.mjs
+git show 1c8f3b1:zombie-atlas/tools/parity.mjs      > /tmp/parity-oracle.mjs
 ```
-
-Since the scanner is gone, `tools/parity.mjs` now guards **drift**: it re-walks
-the tree and compares counts and digests (types, members, enum constants, line
-accounting, references, resolved edges) against `tools/parity-snapshot.json`, so
-a grammar bump or an accidental change fails loudly instead of moving figures on
-screen. `npm run parity -- --update-snapshot` re-records deliberately.
 
 ## Exact matches (no behaviour change)
 

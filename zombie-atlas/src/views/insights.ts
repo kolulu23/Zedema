@@ -5,9 +5,19 @@ import { msg, trLabel } from '../i18n';
  * load-bearing hubs, the Lua API surface and the package coupling table.
  */
 
-import { type Atlas } from '../domain';
+import {
+  type Atlas,
+  type MemberRankRow,
+  type RefChain,
+  type RefChains,
+  type RefCounts,
+  type RefSummary,
+  loadRefChains,
+  loadRefMeta,
+  loadRefSummary,
+} from '../domain';
 import { store, type AppState } from '../state';
-import { fmtCompact, fmtInt, h } from '../util';
+import { fmtCompact, fmtInt, h, kv, watchOverflowTitles } from '../util';
 
 interface TopMethod {
   classId: number;
@@ -35,10 +45,16 @@ let atlas: Atlas | null = null;
 let data: InsightsData | null = null;
 let memberSort: 'complexity' | 'lines' | 'branch' = 'complexity';
 
+/** The reference layer, when the bundle carries one; absent = no extra cards. */
+let refs: { summary: RefSummary | null; chains: RefChains | null; counts: RefCounts | null } | null = null;
+
 export async function initInsights(a: Atlas) {
   atlas = a;
   const res = await fetch('data/insights.json');
   data = (await res.json()) as InsightsData;
+  // Best-effort: a bundle built with --no-refs simply yields no cards here.
+  const [summary, chains, counts] = await Promise.all([loadRefSummary('data'), loadRefChains('data'), loadRefMeta('data')]);
+  refs = summary || chains || counts ? { summary, chains, counts } : null;
   renderInsights(store.state);
 }
 
@@ -51,6 +67,8 @@ export function renderInsights(state: AppState) {
   pane.hidden = false;
   document.getElementById('canvas')!.style.visibility = 'hidden';
   pane.replaceChildren(...cardList());
+  // The "Scale" card carries the same truncating `.kv` rows as the inspector.
+  watchOverflowTitles(pane);
 }
 
 export function teardownInsights() {
@@ -227,7 +245,147 @@ function cardList(): HTMLElement[] {
     )
   );
 
+  cards.push(...refCards());
   return cards;
+}
+
+/** ------------------------------------------------- reference-layer cards -- */
+
+/**
+ * The four cards the fine-grained layer adds. They are appended, never
+ * prepended: the specs address cards by position, and a bundle without the
+ * reference layer must keep exactly the cards it had before.
+ */
+function refCards(): HTMLElement[] {
+  const r = refs;
+  if (!r || !atlas) return [];
+  const cards: HTMLElement[] = [];
+  const classes = atlas.classes.length;
+
+  const members = r.summary?.rankings;
+  if (members?.topCalled?.length) {
+    cards.push(
+      card(
+        msg("Most-called methods"),
+        msg("{0} call sites across {1} types", fmtInt(r.counts?.call ?? 0), fmtInt(classes)),
+        memberRankList(members.topCalled, (v) => msg("{0} calls", fmtInt(v)))
+      )
+    );
+  }
+  if (members?.topWritten?.length) {
+    cards.push(
+      card(
+        msg("Most-written fields"),
+        msg("{0} field writes", fmtInt(r.counts?.write ?? 0)),
+        memberRankList(members.topWritten, (v) => msg("{0} writes", fmtInt(v)))
+      )
+    );
+  }
+  if (r.chains?.deepest?.length) {
+    const rows = r.chains.deepest.slice(0, 12);
+    cards.push(
+      card(
+        msg("Deepest call chains"),
+        msg("{0} chained calls, {1} resolved past their receiver", fmtInt(r.counts?.chains?.sites ?? 0), fmtInt(rows.length)),
+        chainList(rows)
+      )
+    );
+  }
+  if (r.counts) {
+    const c = r.counts.flow;
+    cards.push(
+      card(
+        msg("Reference coverage"),
+        msg("how much of the call graph could be typed"),
+        h(
+          'dl',
+          { class: 'kv' },
+          kv(msg("sites"), fmtInt(r.counts.sites)),
+          kv(msg("resolved to a member"), fmtInt(r.counts.resolved)),
+          kv(msg("class only"), fmtInt(r.counts.classOnly)),
+          kv(msg("unresolved"), fmtInt(r.counts.unresolved)),
+          c ? kv(msg("parameter stores"), fmtInt(c.paramStores)) : null,
+          c ? kv(msg("callback registrations"), fmtInt(c.registers)) : null
+        ),
+        histo(
+          // Receiver shapes are technical names (this / field / chain …): kept
+          // in their source spelling, like every other Java identifier.
+          Object.entries(r.counts.byShape ?? {}).sort((a, b) => b[1] - a[1]) as [string, number][],
+          (k) => String(k)
+        )
+      )
+    );
+  }
+  return cards;
+}
+
+/** A ranking of members: `Type.member`, its package, and the count. */
+function memberRankList(rows: MemberRankRow[], fmt: (v: number) => string): HTMLElement {
+  const box = h('div');
+  rows.slice(0, 14).forEach((row, i) => {
+    const [classId, line, value, name] = row;
+    const c = atlas!.byId[classId];
+    if (!c) return;
+    const max = rows[0][2] || 1;
+    box.append(
+      h(
+        'div',
+        {
+          class: 'rank-row',
+          title: `${c.fqn}.${name} — ${msg("line {0}", line)}`,
+          onclick: () => selectClass(classId),
+        },
+        h('span', { class: 'rk', text: String(i + 1) }),
+        h('span', { class: 'nm', text: `${c.name}.${name}` }),
+        h('span', { class: 'vl', text: fmt(value) }),
+        h('span', { class: 'mini' }, h('i', { style: { width: `${Math.max(2, Math.min(100, (value / max) * 100))}%` } }))
+      )
+    );
+  });
+  return box;
+}
+
+/**
+ * The resolved steps of a chain, as `A.m → B.n → …`.
+ *
+ * Chains are deduplicated by *shape* — the sequence of distinct member names —
+ * because a fluent builder produces one entry per depth (`clear().put()` and
+ * `clear().put().put()` …), which would otherwise fill the card with the same
+ * line repeated.
+ */
+function chainList(rows: RefChain[]): HTMLElement {
+  const box = h('div');
+  const seen = new Set<string>();
+  const distinct: RefChain[] = [];
+  for (const chain of rows) {
+    const shape = [...new Set(chain.path.map(([, , name]) => name))].join('>');
+    if (seen.has(shape)) continue;
+    seen.add(shape);
+    distinct.push(chain);
+    if (distinct.length >= 12) break;
+  }
+  for (const chain of distinct) {
+    const parts: string[] = [];
+    for (const [classId, , name] of chain.path) {
+      const c = atlas!.byId[classId];
+      parts.push(c ? `${c.name}.${name}` : name);
+    }
+    const owner = atlas!.byId[chain.from[0]];
+    box.append(
+      h(
+        'div',
+        {
+          class: 'rank-row',
+          title: `${owner?.fqn ?? ''} line ${chain.line}`,
+          onclick: () => selectClass(chain.from[0]),
+        },
+        h('span', { class: 'rk' }, h('span', { class: 'badge', text: String(chain.path.length) })),
+        h('span', { class: 'nm mono', text: parts.join(' → ') }),
+        h('span', { class: 'vl', text: owner?.name ?? '' })
+      )
+    );
+  }
+  return box;
 }
 
 function rankEntry(
@@ -309,11 +467,5 @@ function card(title: string, sub: string, ...body: (HTMLElement | null)[]): HTML
   const el = h('div', { class: 'card' }, h('h3', { text: title }), h('div', { class: 'sub', text: sub }));
   for (const b of body) if (b) el.append(b);
   return el;
-}
-
-function kv(k: string, v: string): DocumentFragment {
-  const f = document.createDocumentFragment();
-  f.append(h('dt', { text: k }), h('dd', { text: v }));
-  return f;
 }
 

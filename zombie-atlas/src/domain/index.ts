@@ -12,3 +12,15 @@ export * from './metrics';
 export * from './atlas';
 export * from './members';
 export * from './queries';
+
+export {
+  REF_KINDS,
+  REF_KIND_LABEL,
+  loadRefChains,
+  loadRefMeta,
+  loadRefShard,
+  loadRefSummary,
+  refsAvailable,
+  pkgSlugRefs,
+} from './refs';
+export type { MemberFlow, MemberRankRow, MemberRefs, RefChain, RefChains, RefCounts, RefKind, RefRow, RefSummary } from './refs';

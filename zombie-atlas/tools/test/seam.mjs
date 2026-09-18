@@ -94,6 +94,23 @@ export const atlas = {
   }, name),
   /** Path of the first extracted type, for the raw-source plumbing checks. */
   firstPath: (page) => page.evaluate(() => window.zombieAtlas.atlas.classes[0].path),
+  /**
+   * The `n` types with the longest simple names.
+   *
+   * Real fixtures for the panel's width behaviour, derived from the bundle
+   * instead of hard-coded: the inspector repeats a member's name in its rows, so
+   * these are the types whose rows are widest — and they survive renames that a
+   * literal fixture would not.
+   */
+  longestNames: (page, n) =>
+    page.evaluate(
+      (count) =>
+        [...window.zombieAtlas.atlas.classes]
+          .sort((a, b) => b.name.length - a.name.length)
+          .slice(0, count)
+          .map((c) => c.name),
+      n
+    ),
 };
 
 export const treemap = {

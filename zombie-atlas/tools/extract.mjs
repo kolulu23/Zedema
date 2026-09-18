@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCommonArgs, resolveDataOut, resolveSourceDir } from './lib/config.mjs';
 import { initJavaParser, parseJavaFileWith } from './lib/java-ast.mjs';
+import { REF_KINDS, buildReferences, summarise } from './lib/java-refs.mjs';
 import { normalizeTypeRef, simpleName } from './lib/java-names.mjs';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -28,13 +29,17 @@ let PRETTY = argv.includes("--pretty");
 let QUIET = argv.includes('--quiet');
 const { src: cliSrc, out: cliOut } = parseCommonArgs(argv);
 
+// Fine-grained references can be skipped for a lean bundle (they are an order
+// of magnitude more rows than the class graph: ~13 MB of lazy shards).
+const SKIP_REFS = argv.includes('--no-refs') || process.env.ZOMBIE_ATLAS_SKIP_REFS === '1';
+
 /** The parser asked for on the command line, if any. Tree-sitter is the only one there is. */
 const parserArg = (() => {
   const i = argv.indexOf('--parser');
   return i >= 0 ? argv[i + 1] : undefined;
 })();
 /** Ast extraction options: the canonical branch-node set (see docs/parser-parity.md). */
-const AST_OPTIONS = { excludeDefaultLabels: true };
+const AST_OPTIONS = { excludeDefaultLabels: true, references: !SKIP_REFS };
 
 /** Resolved lazily so the module can be imported without touching the disk. */
 let SRC = null;
@@ -202,14 +207,20 @@ export async function runExtraction(opts = {}) {
   // runs the walk saw, so the reference graph below never re-reads a file.
   const { parser: astParser, versions } = await initJavaParser();
   const refsByPath = new Map();
+  const sitesByPath = new Map();
+  const flowByPath = new Map();
   const parseErrorFiles = [];
   const allTypes = [];
   const fileRecords = [];
   for (const f of files) {
     try {
       const rel = `${MOUNT()}/${path.relative(SRC_DIR(), f).split(path.sep).join('/')}`;
-      const { types, file, refs } = parseJavaFileWith(astParser, f, rel, AST_OPTIONS);
+      const { types, file, refs, sites, flow } = parseJavaFileWith(astParser, f, rel, AST_OPTIONS);
       refsByPath.set(file.path, refs);
+      if (sites) {
+        sitesByPath.set(file.path, sites);
+        flowByPath.set(file.path, flow);
+      }
       if (file.parseErrors) parseErrorFiles.push(file.path);
       fileRecords.push(file);
       for (const t of types) allTypes.push(t);
@@ -467,6 +478,23 @@ export async function runExtraction(opts = {}) {
     return t.code;
   }
 
+  // ---- fine-grained references ------------------------------------------------
+  // Sites were collected symbolically while each file was parsed; now that every
+  // type has an id and its supertypes are resolved, they can be pinned down.
+  const references = SKIP_REFS
+    ? { counts: null, byShape: null, perClass: new Map(), chains: null }
+    : buildReferences({ allTypes, sitesByPath, flowByPath, resolveRef });
+  const refSummary = SKIP_REFS ? { classRows: [], rankings: {} } : summarise(allTypes, references.perClass, references.chains);
+  if (!QUIET && !SKIP_REFS) {
+    const c = references.counts;
+    process.stderr.write(
+      `[extract] ${c.sites} sites (${c.call} calls, ${c.read} reads, ${c.write} writes, ${c.new} creations): ` +
+        `${c.resolved} resolved to a member, ${c.classOnly} to a class only, ${c.unresolved} unresolved\n` +
+        `[extract] flow: ${c.flow.paramStores} parameter stores, ${c.flow.returns} returns, ${c.flow.registers} callback registrations; ` +
+        `${c.chains.sites} chains\n`
+    );
+  }
+
   // ---- package tree ----------------------------------------------------------
   const pkgMetrics = new Map(); // pkg -> aggregate
   function blankAgg(name) {
@@ -674,6 +702,7 @@ export async function runExtraction(opts = {}) {
   // members/<slug>.json : { <classId>: [members...] }
   const slugOf = (p) => (p === '(default)' ? '_default' : p.replace(/\./g, '__'));
   const membersByPkg = new Map();
+  const refsByPkg = new Map();
   for (const t of allTypes) {
     const slug = slugOf(t.package);
     if (!membersByPkg.has(slug)) membersByPkg.set(slug, {});
@@ -697,6 +726,42 @@ export async function runExtraction(opts = {}) {
   }
   const MEMBER_COLS = ['kind', 'name', 'type', 'params', 'modifiers', 'annotations', 'line', 'complexity', 'bodyLines', 'doc', 'throws', 'init'];
   for (const [slug, payload] of membersByPkg) write(`members/${slug}.json`, payload);
+
+  // refs/<slug>.json : per member, the rows out of it and into it
+  const REF_COLS = ['line', 'kind', 'name', 'out', 'in', 'flow'];
+  const refCounts = { classes: 0, members: 0, rows: 0 };
+  for (const t of allTypes) {
+    const byLine = references.perClass.get(t.id);
+    if (!byLine) continue;
+    const slug = slugOf(t.package);
+    let payload = refsByPkg.get(slug);
+    if (!payload) refsByPkg.set(slug, (payload = {}));
+    const members = [];
+    for (const [line, entry] of [...byLine.entries()].sort((a, b) => a[0] - b[0])) {
+      const member = t.members.find((m) => m.line === line);
+      const f = entry.flow;
+      const flow = f && (f.paramsToFields.size || f.returns.size || f.registers.size)
+        ? {
+            p: [...f.paramsToFields.values()],
+            r: [...f.returns.values()],
+            g: [...f.registers.values()],
+          }
+        : null;
+      members.push([
+        line,
+        member ? (member.k === 'field' ? 'field' : 'method') : 'synthetic',
+        member ? member.name : '?',
+        entry.out.size ? [...entry.out.values()] : null,
+        entry.in.size ? [...entry.in.values()] : null,
+        flow,
+      ]);
+      refCounts.rows += entry.out.size + entry.in.size;
+    }
+    refCounts.classes++;
+    refCounts.members += members.length;
+    payload[t.id] = { members };
+  }
+  if (!SKIP_REFS) for (const [slug, payload] of refsByPkg) write(`refs/${slug}.json`, payload);
 
   const meta = {
     generated: new Date().toISOString(),
@@ -731,6 +796,9 @@ export async function runExtraction(opts = {}) {
     domains: DOMAINS,
     classColumns: CLASS_COLS,
     memberColumns: MEMBER_COLS,
+    refColumns: ['line', 'kind', 'name', 'out', 'in'],
+    refKinds: SKIP_REFS ? [] : REF_KINDS,
+    refCounts: null,
     metrics: {
       code: 'Non-blank, non-comment source lines',
       loc: 'Total source lines',
@@ -745,6 +813,41 @@ export async function runExtraction(opts = {}) {
     },
   };
 
+  meta.refCounts = SKIP_REFS ? null : { ...references.counts, byShape: references.byShape, rows: refCounts.rows };
+  if (!QUIET && !SKIP_REFS) {
+    process.stderr.write(
+      `[extract] ${refCounts.rows} member reference rows in ${refsByPkg.size} shards ` +
+        `(${refCounts.classes} classes with references)\n`
+    );
+  }
+  if (!SKIP_REFS) write('refs/meta.json', {
+    version: 1,
+    columns: {
+      shard: REF_COLS,
+      row: ['toClassId', 'toLine', 'kind', 'count', 'lines'],
+      flow: {
+        p: '[parameterIndex, fieldLine] — a parameter stored into a field',
+        r: '[provenance, ref] — what a returned value is; 0 param (ref = index), 1 field (ref = line), 2 local, 3 call, 4 literal, 5 creation, 6 other',
+        g: '[classId, line, argShape] — a callback registered with another member (1 = this, 2 = lambda/method reference)',
+      },
+    },
+    kinds: REF_KINDS,
+    counts: { ...references.counts, byShape: references.byShape, rows: refCounts.rows, shards: refsByPkg.size },
+  });
+  if (!SKIP_REFS) {
+    if (!SKIP_REFS) {
+    const chains = references.chains;
+    write('refs/chains.json', {
+      histogram: [...chains.depths.entries()].sort((a, b) => a[0] - b[0]),
+      deepest: [...chains.deepest].sort((a, b) => b.path.length - a.path.length).slice(0, 120),
+    });
+  }
+  write('refs/summary.json', {
+      columns: ['classId', 'outCalls', 'inCalls', 'outReads', 'inReads', 'outWrites', 'inWrites'],
+      classRows: refSummary.classRows,
+      rankings: refSummary.rankings,
+    });
+  }
   write('meta.json', meta);
   write('packages.json', pkgTree);
   write('classes.json', { columns: CLASS_COLS, rows: classRows });

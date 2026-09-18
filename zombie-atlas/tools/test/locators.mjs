@@ -162,6 +162,20 @@ export const inspectorBadges = (page) => page.locator(`${sel.inspectorBody} .bad
 export const metricKeys = (page) => page.locator(`${sel.inspectorBody} .kv dt`);
 /** One row per member in the filterable members list. */
 export const memberRows = (page) => page.locator(`${sel.inspectorBody} .member-list .member`);
+/** The inspector's References section — present only when the bundle has the reference layer. */
+export const refsSection = (page) => page.locator(`${sel.inspectorBody} [data-refs="section"]`);
+/** Rows inside the References section (one per referenced member). */
+export const refsRows = (page) => page.locator(`${sel.inspectorBody} [data-refs="row"]`);
+
+/* ------------------------------------------------------- dependencies ----- */
+
+/** The caret that expands one class pair into its member-level edges. */
+export const memberEdgeCaret = (page) => page.locator(`${sel.pane.dependencies} .edge-item .caret`);
+/** The member-level rows revealed by that caret. */
+export const memberEdgeRows = (page) => page.locator(`${sel.pane.dependencies} .member-edges .link`);
+/** One insight card, located by its heading. */
+export const insightCardNamed = (page, title) =>
+  page.locator(`${sel.pane.insights} .card`).filter({ has: page.locator('h3', { hasText: title }) });
 
 /* ---------------------------------------------------------------- modal -- */
 
