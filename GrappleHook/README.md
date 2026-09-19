@@ -64,12 +64,11 @@ first when the window is closed. Ropes are the ammunition.
   (`IsoWindow:addSheetRope`), which spends the rope items and replicates the rope
   objects to clients. Singleplayer uses the same code path in-process.
 
-## Known gaps
-
-- **No custom asset.** The hook has an icon but no weapon model or animation, so it
+## TODO
+- **Custom asset.** The hook has an icon but no weapon model or animation, so it
   renders invisible in hand, and there is no flying-hook visual — only a launch
-  sound, the reticle, and the rope appearing. `tools/make_assets.py` generates the
-  placeholder icon and posters.
+  sound, the reticle, and the rope appearing.
+- **Mod Info**. Poster and preview images not added
 - **Multiplayer is unverified.** The code follows the repository's B42.13+ rule
   (client sends intent, server decides), but it has not been run on a real dedicated
   server with two clients. See `docs/testing.md`.
@@ -87,7 +86,6 @@ first when the window is closed. Ropes are the ammunition.
 ```sh
 sh GrappleHook/tests/run.sh          # luac -p on every source, then lifecycle + static checks
 
-python3 GrappleHook/tools/make_assets.py   # regenerate icon and posters
 sh scripts/deploy_workshop.sh GrappleHook   # stage into the local workshop cache
 ```
 

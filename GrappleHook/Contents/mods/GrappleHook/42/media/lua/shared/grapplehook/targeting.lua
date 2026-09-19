@@ -8,8 +8,26 @@
 -- the first window that passes every rule below.
 require "grapplehook/core"
 
-local GH = GrappleHook
+---@class grapplehook.Verdict Evaluation of one possible grapple target.
+---@field ok boolean Whether the server would accept the shot.
+---@field reason string UI string key describing the outcome or the refusal.
+---@field cost integer Number of rope items the rope will spend.
+---@field breakWindow boolean Whether the hook must smash the glass first.
+---@field north boolean Which face of the window the rope would hang from.
+---@field x integer World X of the aimed square (only set on ok verdicts).
+---@field y integer World Y of the aimed square (only set on ok verdicts).
+---@field z integer World Z of the aimed square (only set on ok verdicts).
 
+---@class grapplehook.TargetOpts Overrides for a single targeting pass.
+---@field cell IsoCell? Cell to search in (defaults to getCell()).
+---@field maxFloors integer? Overrides the MaxFloors sandbox option.
+---@field maxRange number? Overrides the MaxRange sandbox option.
+---@field breakWindows boolean? Overrides the BreakWindows sandbox option.
+
+---@param cell IsoCell
+---@param character IsoGameCharacter
+---@param square IsoGridSquare
+---@return boolean
 local function blockedByGeometry(cell, character, square)
     -- LosUtil.lineClear returns a Java enum that is not exposed to Lua, so the
     -- result is classified by name. An unreadable name counts as visible: the drop
@@ -23,14 +41,19 @@ local function blockedByGeometry(cell, character, square)
 end
 
 --- Decides whether one window can be grappled, and what the shot would cost.
--- @return table {ok, reason, cost, breakWindow, north, x, y, z}
-function GH.evaluate(player, square, window, opts)
+---@param player IsoPlayer?
+---@param square IsoGridSquare?
+---@param window IsoWindow?
+---@param opts grapplehook.TargetOpts?
+---@return grapplehook.Verdict
+function GrappleHook.evaluate(player, square, window, opts)
     opts = opts or {}
-    local maxFloors = opts.maxFloors or GH.maxFloors()
-    local maxRange = opts.maxRange or GH.maxRange()
+    local maxFloors = opts.maxFloors or GrappleHook.maxFloors()
+    local maxRange = opts.maxRange or GrappleHook.maxRange()
     local allowBreak = opts.breakWindows
-    if allowBreak == nil then allowBreak = GH.breakWindows() end
+    if allowBreak == nil then allowBreak = GrappleHook.breakWindows() end
 
+    ---@type grapplehook.Verdict
     local verdict = {ok = false, reason = "UI_GH_Invalid", cost = 0, breakWindow = false}
     if not player or not square or not window then
         verdict.reason = "UI_GH_NoWindow"
@@ -62,7 +85,7 @@ function GH.evaluate(player, square, window, opts)
         return verdict
     end
 
-    local range = GH.distance2d(player:getX(), player:getY(), square:getX() + 0.5, square:getY() + 0.5)
+    local range = GrappleHook.distance2d(player:getX(), player:getY(), square:getX() + 0.5, square:getY() + 0.5)
     if range > maxRange then
         verdict.reason = "UI_GH_TooFar"
         return verdict
@@ -83,7 +106,7 @@ function GH.evaluate(player, square, window, opts)
         verdict.breakWindow = true
     end
 
-    if GH.ropeCount(player) < verdict.cost then
+    if GrappleHook.ropeCount(player) < verdict.cost then
         verdict.reason = "UI_GH_NeedRopes"
         return verdict
     end
@@ -100,24 +123,30 @@ function GH.evaluate(player, square, window, opts)
 end
 
 --- Finds the grapple target under the cursor, searching upwards.
--- @return the verdict for the nearest usable window, or nil plus the reason the
---         nearest candidate was rejected, which is what the reticle shows.
-function GH.findTarget(player, mouseX, mouseY, opts)
+---@param player IsoPlayer?
+---@param mouseX number
+---@param mouseY number
+---@param opts grapplehook.TargetOpts?
+---@return grapplehook.Verdict? The verdict for the nearest usable window, or nil
+---         plus the reason the nearest candidate was rejected, which is what the
+---         reticle shows.
+---@return grapplehook.Verdict?
+function GrappleHook.findTarget(player, mouseX, mouseY, opts)
     if not player then return nil end
     opts = opts or {}
     local cell = opts.cell or getCell()
     local index = player:getPlayerNum()
     local baseZ = math.floor(player:getZ())
-    local floors = opts.maxFloors or GH.maxFloors()
+    local floors = opts.maxFloors or GrappleHook.maxFloors()
     local rejected
     for floor = 1, floors do
         local z = baseZ + floor
         local wx = IsoUtils.XToIso(index, mouseX, mouseY, z)
         local wy = IsoUtils.YToIso(index, mouseX, mouseY, z)
         local square = cell:getGridSquare(math.floor(wx), math.floor(wy), z)
-        local window = square and GH.windowOn(square, player)
+        local window = square and GrappleHook.windowOn(square, player)
         if window then
-            local verdict = GH.evaluate(player, square, window, opts)
+            local verdict = GrappleHook.evaluate(player, square, window, opts)
             if verdict.ok then return verdict end
             if not rejected then rejected = verdict end
         end

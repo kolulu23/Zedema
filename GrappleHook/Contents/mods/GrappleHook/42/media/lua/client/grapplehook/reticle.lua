@@ -3,10 +3,12 @@ require "ISUI/ISUIElement"
 require "grapplehook/core"
 require "grapplehook/targeting"
 
-local GH = GrappleHook
+---@type ISGrappleReticle?
+GrappleHook.reticle = nil
 
-GH.reticle = nil
-
+---@class ISGrappleReticle : ISUIElement Cursor reticle showing whether the shot
+--- would land.
+---@field player IsoPlayer The player whose cursor this reticle tracks.
 ISGrappleReticle = ISUIElement:derive("ISGrappleReticle")
 
 function ISGrappleReticle:initialise()
@@ -17,10 +19,10 @@ end
 
 function ISGrappleReticle:render()
     local player = self.player
-    if not player or player:isDead() or not GH.heldHook(player) then return end
+    if not player or player:isDead() or not GrappleHook.heldHook(player) then return end
 
     local mouseX, mouseY = getMouseXScaled(), getMouseYScaled()
-    local verdict, rejected = GH.findTarget(player, mouseX, mouseY, {cell = getCell()})
+    local verdict, rejected = GrappleHook.findTarget(player, mouseX, mouseY, {cell = getCell()})
     local state = verdict or rejected
     local r, g, b = 0.85, 0.35, 0.2
     if verdict then r, g, b = 0.35, 0.85, 0.35 end
@@ -40,6 +42,8 @@ function ISGrappleReticle:render()
     self:drawTextCentre(text, mouseX, mouseY + 18, r, g, b, 1, UIFont.Small)
 end
 
+---@param player IsoPlayer The player the reticle belongs to.
+---@return ISGrappleReticle
 function ISGrappleReticle:new(player)
     local o = ISUIElement.new(self, 0, 0, getCore():getScreenWidth(), getCore():getScreenHeight())
     o.player = player

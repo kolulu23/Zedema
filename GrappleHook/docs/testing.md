@@ -37,7 +37,7 @@ revision.
 | # | Scenario | Action | Pass criterion |
 | --- | --- | --- | --- |
 | 1 | Item loads | Open the debug item panel | `Base.GrappleHook` exists with its icon; no `InvalidParameterException` in the log (validates the `ItemType` key) |
-| 2 | Reticle | Equip the hook in the primary hand, sweep the cursor | Ticks follow the cursor; text turns green over a valid upstairs window, red with a reason elsewhere |
+| 2 | Reticle | Equip the hook in the primary hand, sweep the cursor | Ticks follow the cursor; text turns green over a valid upstairs window, red with a reason elsewhere; holding the hook logs no NPE (a Weapon must name a `StaticModel`) |
 | 3 | Shot | Aim at a 2nd-floor window from the ground, left-click | Character braces, launch sound plays, rope appears on the window, no bullet/tracer and no swing |
 | 4 | Break rule | Aim at the same closed window with 2 ropes | Window breaks (glass sound, shards, alarm if the house has one) and then carries the rope |
 | 5 | Open window | Aim at an open window | No break; rope tied directly |

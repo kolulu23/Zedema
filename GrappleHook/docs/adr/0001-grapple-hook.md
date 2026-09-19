@@ -93,5 +93,7 @@ spelling, so it is asserted by `tests/validate.py` and flagged for the smoke tes
 - Unverified until played: the `ItemType` spelling, the launch sound name
   (`AttackShove`, chosen because the engine itself references it), the enum-name
   classification of `LosUtil.lineClear`, and the multiplayer round trip.
-- No custom model/animation yet, so the launcher is invisible in hand and the shot
-  has no flying-hook visual.
+- No custom model/animation yet: the launcher reuses a vanilla model
+  (`StaticModel = Base.Crowbar`) because a Weapon with a null StaticModel crashes in
+  `ModelManager.addEquippedModelInstance` when held (first play test, 2026-09-25);
+  the shot has no flying-hook visual.

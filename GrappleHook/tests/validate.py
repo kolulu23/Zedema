@@ -41,7 +41,7 @@ for event in sorted(set(re.findall(r"Events\.([A-Za-z_]\w*)", joined))):
     assert f"Events.{event} =" in events, f"Unknown event: {event}"
 
 hooks = (repo / "zombie/Lua/LuaHookManager.java").read_text()
-for hook in sorted(set(re.findall(r"Hook\.([A-Za-z_]\w*)\.", joined))):
+for hook in sorted(set(re.findall(r"\bHook\.([A-Za-z_]\w*)\.", joined))):
     assert f'AddEvent("{hook}")' in hooks, f"Unknown Lua hook: {hook}"
 
 # Engine globals the mod calls. A rename here is silent at load time and only fails

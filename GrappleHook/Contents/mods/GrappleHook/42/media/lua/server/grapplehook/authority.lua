@@ -6,11 +6,9 @@ require "grapplehook/core"
 require "grapplehook/attach"
 if isClient() then return end
 
-local GH = GrappleHook
-
 Events.OnClientCommand.Add(function(module, command, player, args)
-    if module ~= GH.module or command ~= GH.commandFire then return end
-    local ok, reason = GH.execute(player, args)
-    GH.log("fire from", player:getUsername(), tostring(ok), tostring(reason))
-    sendServerCommand(player, GH.module, GH.commandResult, {ok = ok, reason = reason})
+    if module ~= GrappleHook.module or command ~= GrappleHook.commandFire then return end
+    local ok, reason = GrappleHook.execute(player, args)
+    GrappleHook.log("fire from", player:getUsername(), tostring(ok), tostring(reason))
+    sendServerCommand(player, GrappleHook.module, GrappleHook.commandResult, { ok = ok, reason = reason })
 end)

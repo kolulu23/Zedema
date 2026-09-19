@@ -17,6 +17,10 @@ module Base
         ItemType = Weapon,
         DisplayName = Grapple Hook,
         Icon = GrappleHook,
+        /* Placeholder model. A Weapon must name a StaticModel (or WeaponSprite) or the engine
+           NPEs in ModelManager.addEquippedModelInstance when a character holds it. This reuses
+           the vanilla crowbar model until the mod ships its own mesh. */
+        StaticModel = Base.Crowbar,
         Weight = 2.0,
         MinDamage = 0,
         MaxDamage = 0,

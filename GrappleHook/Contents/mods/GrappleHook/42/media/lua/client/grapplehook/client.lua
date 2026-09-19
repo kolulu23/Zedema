@@ -14,40 +14,46 @@ require "grapplehook/action"
 require "grapplehook/reticle"
 require "TimedActions/ISTimedActionQueue"
 
-local GH = GrappleHook
 local registered = false
 
+---@param player IsoPlayer
 local function fire(player)
-    local verdict = GH.findTarget(player, getMouseXScaled(), getMouseYScaled(), {cell = getCell()})
+    local verdict = GrappleHook.findTarget(player, getMouseXScaled(), getMouseYScaled(), {cell = getCell()})
     if not verdict then
-        GH.log("no grapple target under the cursor")
+        GrappleHook.log("no grapple target under the cursor")
         return
     end
     ISTimedActionQueue.add(ISGrappleHookFire:new(player, verdict))
 end
 
+---@param player IsoPlayer
+---@param chargeDelta number
+---@param weapon InventoryItem? The item the interrupted attack was made with.
 local function onAttack(player, chargeDelta, weapon)
     -- The hook reports the item the attack was made with (leftHandItem). Anything
     -- else means the attack belongs to another weapon, so it is re-issued through
     -- the path that bypasses the hook instead of being swallowed.
-    if not GH.isHook(weapon) then
+    if not GrappleHook.isHook(weapon) then
         player:AttemptAttack()
         return
     end
     fire(player)
 end
 
+---@param value boolean
 local function setRegistered(value)
     if value == registered then return end
     registered = value
     if value then Hook.Attack.Add(onAttack) else Hook.Attack.Remove(onAttack) end
 end
 
+---@param player IsoPlayer
+---@param show boolean
 local function setReticle(player, show)
-    local reticle = GH.reticle
+    local reticle = GrappleHook.reticle
     if not show then
         if reticle then reticle:removeFromUIManager() end
-        GH.reticle = nil
+        GrappleHook.reticle = nil
         return
     end
     local width, height = getCore():getScreenWidth(), getCore():getScreenHeight()
@@ -56,11 +62,12 @@ local function setReticle(player, show)
     reticle = ISGrappleReticle:new(player)
     reticle:initialise()
     reticle:addToUIManager()
-    GH.reticle = reticle
+    GrappleHook.reticle = reticle
 end
 
+---@param player IsoPlayer
 local function sync(player)
-    local held = GH.heldHook(player) ~= nil
+    local held = GrappleHook.heldHook(player) ~= nil
     setRegistered(held)
     setReticle(player, held)
 end
@@ -70,10 +77,12 @@ Events.OnPlayerUpdate.Add(function(player)
     sync(player)
 end)
 
+---@param character IsoGameCharacter
 local function onEquip(character)
     -- OnEquipPrimary/Secondary carry an IsoGameCharacter, which can be a zombie or
     -- an animal; only players answer isLocalPlayer().
     if not instanceof(character, "IsoPlayer") then return end
+    ---@cast character IsoPlayer
     if character:isLocalPlayer() then sync(character) end
 end
 
@@ -87,7 +96,7 @@ Events.OnPlayerDeath.Add(function(player)
 end)
 
 Events.OnServerCommand.Add(function(module, command, args)
-    if module ~= GH.module or command ~= GH.commandResult then return end
+    if module ~= GrappleHook.module or command ~= GrappleHook.commandResult then return end
     if type(args) ~= "table" or args.ok then return end
-    GH.log("server refused the shot:", tostring(args.reason))
+    GrappleHook.log("server refused the shot:", tostring(args.reason))
 end)
