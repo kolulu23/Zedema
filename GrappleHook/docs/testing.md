@@ -6,7 +6,8 @@ change.** Test IDs are requirements, not assertions of completed coverage.
 Use the [design](design.md) as the oracle and [engine contracts](engine-contracts.md)
 as the API evidence boundary. Construct fresh fixtures; never assert correctness
 because source text contains a particular method, item key, or hook registration.
-Static checks may reject violations, but cannot prove behavior.
+Static checks may reject violations, but cannot prove behavior. Follow
+[custom-assets.md](custom-assets.md) for asset production and presentation ownership.
 
 ## Evidence tiers
 
@@ -55,6 +56,19 @@ Every row below has initial status NOT RUN. SP/MP means both release modes.
 | T28 | D08/D09 | Repeated equip/aim/cancel and world transitions; state/callback counts stabilize; no idle aim scans, world mutation from render or leaked player references |
 | T29 | D09 | Recorded map/hardware and multiple active aimers; measure p50/p95/p99 evaluation and commit durations, read counts and cache bounds; quotas fail closed |
 | T30 | D02/D08/D10 | Linux cold-load and path case checks, EN/CN key/format parity, visible text reasons and all advertised controls; optional controller/local co-op verified separately before advertising |
+| T31 | D02/E11 | Load the custom FBX/atlas, equip in all eight facings, drop/place/rotate/pick up; held and ground transforms work independently; no substitute combat item |
+| T32 | D02/E11 | Inventory UI scales and close/far game zoom; icon silhouette, atlas UVs, alpha edges and shading remain legible; no missing-texture or case-resolution errors |
+| T33 | D02/E11/E12 | Supported body variants and bulky clothing in idle/brace/recovery; correct grip without severe clipping; any enabled exact-muzzle accent follows verified transforms |
+| T34 | D02/E13 | Fresh successful outcome plays owner-local custom audio once; zero/noisy launch radius, muted client audio and native glass/alarm tested separately; no second server world-noise stimulus or accidental rebroadcast |
+| T35 | D05/D07/E13 | Rejected/cancelled/partial/unknown operations never show successful attachment VFX; duplicate/status/reconnect/obsolete replies never replay launch accents or sounds |
+| T36 | D09/E13 | Pan/zoom, roof/fog occlusion, unload, low frame rates, missing textures/clips and effects disabled; no hidden target reveal, leaks or gameplay change; TTL/caps enforced |
+| T37 | D08/E11 | Fresh export from recorded source/profile matches reviewed appearance; hashes/manifest updated, IDs and paths resolve on Linux, and workshop package excludes proprietary references/editable art |
+| T38 | D02/D08/E12/E13 | Action cancellation, death and world transition restore only owned pose/model/sound state; native pose works without optional clips; any enabled custom clip cannot affect action duration or world mutation |
+
+T31-T38 extend the asset guide. Declare optional custom clip/flight scope in each
+record. Test baseline behavior even when an optional effect is excluded; do not
+mark an unexecuted optional feature PASS. Remote custom VFX/audio are not baseline
+features; multiplayer still requires observers to see native window/rope results.
 
 ## Required properties
 
@@ -72,6 +86,8 @@ Generate command/action orderings and geometry fixtures to verify:
   replacement. Selection/late replies never cross actors or selection generations.
 - Memory, scan counts and request work stay within configured bounds; terminal
   cleanup cannot cancel another actor's operation.
+- Disabling cosmetics, shortening a clip, dropping an effect event or muting local
+  audio does not change authority timing, geometry, material debit or world effects.
 
 ## Real-engine fixtures and multiplayer procedure
 
@@ -94,6 +110,12 @@ an actual user's save. Record which native changes completed before the failure.
 Keep crash-mid-native-mutation recovery distinct from T27: this design does not claim
 crash-atomic inventory/map saving or durable operation replay.
 
+For asset tests, use source/export manifests and a separate no-mutation preview
+fixture before joining live gameplay. Capture all facings, ground placement,
+inventory icon and action interruption in the actual game. Test local presentation
+and observer-native world results separately; a Blender render or sound-editor
+playback does not establish runtime integration.
+
 ## Evidence record template
 
 ```text
@@ -103,6 +125,8 @@ Executed at (timestamp and timezone):
 Tester; OS/hardware:
 Game build; Umbrella commit; mod commit:
 Mode; server settings; other enabled mods:
+Enabled/excluded optional presentation features:
+Asset source/output hashes; exporter/profile; measured transforms, if relevant:
 Fixture/save description and reproduction steps:
 Expected result:
 Observed window/rope/material state before and after:
@@ -118,12 +142,16 @@ evidence. Failing cases remain recorded after a fix and link to their retest.
 
 ## Release gate
 
-All E01-E10 and required T01-T30 checks must pass at the appropriate evidence tiers
-on the exact advertised game build. Required SP and dedicated MP cannot be waived.
-Controller/local co-op may remain explicitly unsupported. There must be no unresolved
-permission bypass, duplicated effect, incorrect debit, blocked-path acceptance,
-unexplained partial mutation, or unsafe item/action lifecycle behavior.
+All E01-E13 and required T01-T38 checks must pass at the appropriate evidence tiers
+on the exact advertised game build and shipped feature scope. Asset probe passes
+must be followed by production-integration evidence. Required SP and dedicated MP
+cannot be waived. Controller/local co-op and optional custom animation/flight may
+remain explicitly unsupported; baseline custom static item and readable local
+feedback remain required. There must be no unresolved permission bypass, duplicated
+effect, incorrect debit, blocked-path acceptance, unexplained partial mutation,
+hidden-target reveal, or unsafe item/action/presentation lifecycle behavior.
 
 Publish exact supported versions, inventory scope, input modes, conservative geometry
-limits and the irreversible-window-break caveat. Performance values must be measured;
-no arbitrary timing threshold is presented here as a demonstrated engine capability.
+limits, presentation scope and the irreversible-window-break caveat. Performance
+values must be measured; no arbitrary timing threshold is presented here as a
+demonstrated engine capability.

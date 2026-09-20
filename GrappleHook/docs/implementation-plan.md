@@ -23,6 +23,12 @@ drafted while P0 runs. No engine-bound implementation may assume a failed or
 unresolved P0 contract. P4 requires P1-P3; P6 requires P5. A failed gate is a design
 decision to resolve, not permission to add a fallback path.
 
+The parallel asset workstream is specified in [custom-assets.md](custom-assets.md):
+A0 calibration joins P0, A1 static item and A2 action presentation join P2, A3
+feedback integration joins P6 after P5, and A4 delivery closes the release. Mesh,
+texture, icon and audio authoring can proceed earlier; runtime effects cannot bypass
+execution gates. No custom asset is claimed to exist yet.
+
 ## P0 - Prove the engine boundary first
 
 Inputs: [engine contracts](engine-contracts.md), exact game 42.20.4 installation,
@@ -35,14 +41,23 @@ Test open windows first, then closed windows; failures must not be masked by a m
 Capture the exact vanilla material/placement behavior rather than reproducing it
 from assumptions.
 
-Deliverables: evidence for each probe, a lifecycle/context trace, material/geometry
-fixtures, and a concrete mapping from each adapter operation to verified APIs.
-Identify the exact candidate gameplay values requiring calibration. No general
-capability registry or multi-build adapter framework is needed.
+Add A0 asset probes for E11-E13: an asymmetric checker-textured FBX, trial icon,
+held/ground attachment calibration, native action pose restoration, local audio
+ownership and a read-only result marker. Prove these with a standalone presentation
+fixture; production artwork and a working deployment are not prerequisites. Record
+exporter versions/settings and actual script/model/animation identifiers. Optional
+custom skeletal clips or depth-tested world VFX need additional scoped evidence.
 
-Exit: E01-E07 and E09 PASS for the intended release modes. Any failed execution,
-preflight, cost or replication contract stops dependent work. A changed architecture
-requires an explicit design revision and updated acceptance tests.
+Deliverables: evidence for each probe, a lifecycle/context trace, material/geometry
+fixtures, an asset export profile, and a concrete mapping from each adapter operation
+to verified APIs. Identify the exact candidate gameplay values requiring calibration.
+No general capability registry or multi-build adapter framework is needed.
+
+Exit: E01-E07 and E09 PASS for the intended release modes; baseline E11-E13 probes
+PASS before dependent presentation integration. Production-asset acceptance still
+occurs in P2/P6. Any failed execution, preflight, cost or replication contract stops
+dependent work. A changed architecture requires an explicit design revision and
+updated acceptance tests.
 
 ## P1 - Build the pure model and independent tests
 
@@ -69,13 +84,21 @@ timed-action bridge with a no-op authority writer; map admission, cancellation a
 completion exactly as established in E03. There must be no fire RPC or alternate
 shot loop.
 
+Finish A1/A2: build the custom rigid launcher, painted UV atlas, inventory icon and
+held/ground model registrations using the calibrated export profile. Reuse the mesh
+for the ground model when possible; verify its independent placement transform.
+Use a proved native tool pose first. Test any custom clip separately without making
+its animation events authoritative. Keep editable art and proprietary references
+out of the runtime package.
+
 Exercise equip/unequip, text focus, weapon attacks, interrupted actions, death and
 world changes. Verify each native callback's role. Rendering and presentation may
 observe state but cannot commit it.
 
-Deliverables: independently playable no-op tool, role/ownership assertions and
-lifecycle integration tests. Exit: T01, T02, T07, T19, T20 and T28 pass for the shell;
-zero inventory or world effects are possible yet.
+Deliverables: independently playable no-op tool, custom static assets, export/source
+manifest, role/ownership assertions and lifecycle integration tests. Exit: T01, T02,
+T07, T19, T20, T28, T31-T33 and baseline T38 pass for the shell; zero inventory or
+world effects are possible yet. Optional animation scope must be declared explicitly.
 
 ## P3 - Read-only targeting and authoritative quotes
 
@@ -131,19 +154,33 @@ real MP; no unresolved duplicate, debit, permission or replication fault remains
 
 ## P6 - Presentation, budgets and release candidate
 
-Add verified launch presentation and optional cosmetic line only after P5. Check
-model, animation, sound, glass warnings, landing feedback and all translated reasons.
-Measure candidate scanning, quote load and cleanup against D09 budgets. Verify Linux
+Integrate A3 from [custom-assets.md](custom-assets.md) only after P5: owner-local
+custom launch audio, fresh-outcome result feedback and an optional bounded hook/line
+accent. Native window/rope changes remain the observer-visible world result. Do not
+add a second deploy request, guessed world renderer or duplicate sound replication.
+Keep authority launch noise independent of client audio volume/effect settings.
+True pre-impact flight or remote custom effect broadcasts require a separate design
+change; this workstream does not add them implicitly.
+
+Check model, animation, sound, glass warnings, landing feedback and all translated
+reasons. Exercise disabled effects, missing textures/clips, delayed/duplicate outcomes,
+camera movement and conservative occlusion. Presentation failures must not change
+inventory or world success. Measure candidate scanning, quote load, effect TTLs and
+cleanup against D09 and the asset guide's proposed budgets. Verify Linux
 case-sensitive packaging and a cold start with only the intended package enabled.
+
+Complete A4: record asset provenance/permissions, exporter versions, source/output
+hashes, measured attachment transforms and SP/MP captures. Audit the workshop package
+for omitted files, duplicate IDs, editable source and proprietary reference assets.
 
 Document tested controls, inventory scope, target geometry and exact supported game
 builds. Advertise controller/local co-op only after their additional tests pass.
 Do not label a build playable solely because the pure runner is green.
 
-Deliverables: completed test evidence, known limitations, installation/usage guide,
-measured performance report and release checklist. Exit: all required T01-T30 gates
-PASS, optional modes explicitly supported or excluded, and every advertised claim
-backed by an evidence record.
+Deliverables: completed test evidence, source/export manifest, known limitations,
+installation/usage guide, measured performance report and release checklist. Exit:
+all required T01-T38 gates PASS for the shipped feature scope, optional modes/assets
+explicitly supported or excluded, and every advertised claim backed by evidence.
 
 ## Proposed module layout
 
@@ -152,9 +189,11 @@ Keep modules small and combine adjacent files if separation adds no value.
 
 ```text
 Contents/mods/GrappleHook/
-  common/media/                         verified shared assets
+  common/media/                         verified shared assets; see custom-assets.md
   42/mod.info
   42/media/scripts/grapplehook_items.txt
+  42/media/scripts/grapplehook_models.txt
+  42/media/scripts/grapplehook_sounds.txt
   42/media/lua/shared/grapplehook/
     model.lua                           plain data and reason definitions
     policy.lua                          eligibility, bill/plan checks
@@ -165,6 +204,7 @@ Contents/mods/GrappleHook/
     bootstrap.lua                       idempotent client registration
     controller.lua                      per-player input/selection
     view.lua                            render cached state only
+    presentation.lua                    owned, bounded cosmetic state/audio
   42/media/lua/server/grapplehook/
     bootstrap.lua                       verified authority guard
     quote_transport.lua                 quote/status messages only

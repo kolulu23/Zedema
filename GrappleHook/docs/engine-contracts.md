@@ -28,11 +28,17 @@ These are primary reference artifacts from their maintainers, not behavior tests
 | U3 | Shared `ISBaseTimedAction` declares a network-action field, duration, validation, cancellation and presentation methods | Trusted server admission, elapsed-time enforcement or delivery guarantees |
 | U4 | `LosUtil` exposes line/collision queries returning several types, including `LosUtil.TestResults` | That one query proves complete cross-floor projectile or rope clearance |
 | U5 | `IsoUtils` exposes floor-aware projection and player-index overloads | Correct viewport/camera scaling for every supported input layout |
+| U6 | `ModelScript` exposes mesh/texture/shader names, static classification and attachment lookup | Script-key grammar, FBX axis/scale conventions or held rendering for a non-combat item |
+| U7 | `ModelAttachment` exposes bone, offset, rotation and scale data | Blender Empty import, required grip/socket IDs or a composed world-space muzzle transform |
+| U8 | Client `ISUIElement` declares textured lines, lines and polygons | World depth testing, roof/fog occlusion or a free-flight 3D model renderer |
+| U9 | `BaseSoundEmitter` declares playback, position, individual sound handles and stop operations | Whether a chosen overload rebroadcasts, emits world noise, or shares lifetime with other actions |
 
-Sources: [U1][u1], [U2][u2], [U3][u3], [U4][u4], [U5][u5]. Supplementary official
-documentation: [IsoWindow][j1], [LosUtil][j2], [LosUtil.TestResults][j3], checked
-2026-09-20. No availability or semantic inference beyond the table is accepted
-from these links.
+Sources: [U1][u1], [U2][u2], [U3][u3], [U4][u4], [U5][u5], [U6][u6], [U7][u7],
+[U8][u8], [U9][u9]. Supplementary official documentation: [IsoWindow][j1],
+[LosUtil][j2], [LosUtil.TestResults][j3], checked 2026-09-20. See
+[custom-assets.md](custom-assets.md) for the authoring references and illustrative
+registration templates. No availability or semantic inference beyond these tables
+is accepted from a source link alone.
 
 ## Mandatory executable contracts
 
@@ -50,6 +56,16 @@ Every row starts **NOT RUN**. Fill evidence, not an assertion, before changing i
 | E08 | Verify disconnect, respawn, world reload, action interruption, committed rope save/load and observer convergence after reconnect. | Block release on stale actions, missing ropes or replay | T19, T20, T27 |
 | E09 | Verify startup registration and runtime authority guards across client/server/shared load contexts; no combat hooks or duplicated event installation. | Disable the feature on a context mismatch | T02, T07, T28 |
 | E10 | Measure bounded scans, quote dispatch, memory cleanup and non-aim idle work on recorded hardware/build. Validate EN/CN, Linux paths and optional input modes independently. | Reduce advertised support or fix budgets before release | T28-T30 |
+| E11 | Probe custom FBX and PNG loading, exact script keys/resource resolution, non-combat held rendering, grip/ground transforms and required folder case. Record Blender/exporter version, profile, measured transforms and production-asset hashes. | Block shipping custom item presentation; do not switch to a combat item or guess offsets | T31-T33, T37 |
+| E12 | Prove native action pose and hand-model override restoration on interruption, death and world transition. For any custom clip, prove skeleton mapping, clip registration, transitions and SP/MP pose behavior without animation-owned mutation. | Retain only a tested native pose; optional clips remain disabled until scoped evidence passes | T19, T20, T33, T38 |
+| E13 | Prove file-based custom sound loading and local playback ownership, separate authoritative world noise, fresh-outcome dedup, render projection/visibility, resource cleanup and effect-disabled equivalence. Exact muzzle/world rendering requires its own proof if enabled. | Disable unproven optional accents; block release for gameplay coupling, duplicate noise or unreadable baseline feedback | T34-T38 |
+
+E11-E13 have a calibration/probe phase and a final production-integration phase.
+A probe pass is not acceptance of the finished mesh, clip or sound. Optional
+skeletal animation, world-space flight and remote custom presentation must be
+listed as enabled or excluded; excluded features do not receive a PASS or a
+compatibility claim. Baseline static item, action restoration and local feedback
+contracts remain required.
 
 ## How to collect evidence
 
@@ -58,6 +74,11 @@ vanilla script hashes, operating system, enabled mods, server settings and mod
 revision. Store a minimal fixture description, numbered reproduction steps,
 expected observations, actual observations and relevant timestamped logs. Capture
 before/after material counts and rope/window state, not only a screenshot of a rope.
+
+For assets, add source/output hashes, exporter version/settings, attachment
+transforms, shader/material assumptions and tested animation/sound identifiers.
+Capture the actual equipped, ground and inventory presentations. Separate an
+artist's source render from an executed in-game observation.
 
 Inspect native implementation details locally where needed; do not redistribute
 game source or treat an unrelated third-party decompile as exact-build evidence.
@@ -73,6 +94,10 @@ engine tests must appear as separate evidence categories.
 [u3]: https://github.com/PZ-Umbrella/Umbrella/blob/98f50ae698aab1dc7c44ba4fba87c33c800fee20/library/lua/shared/TimedActions/ISBaseTimedAction.lua
 [u4]: https://github.com/PZ-Umbrella/Umbrella/blob/98f50ae698aab1dc7c44ba4fba87c33c800fee20/library/java/zombie/iso/LosUtil.lua
 [u5]: https://github.com/PZ-Umbrella/Umbrella/blob/98f50ae698aab1dc7c44ba4fba87c33c800fee20/library/java/zombie/iso/IsoUtils.lua
+[u6]: https://github.com/PZ-Umbrella/Umbrella/blob/98f50ae698aab1dc7c44ba4fba87c33c800fee20/library/java/zombie/scripting/objects/ModelScript.lua
+[u7]: https://github.com/PZ-Umbrella/Umbrella/blob/98f50ae698aab1dc7c44ba4fba87c33c800fee20/library/java/zombie/scripting/objects/ModelAttachment.lua
+[u8]: https://github.com/PZ-Umbrella/Umbrella/blob/98f50ae698aab1dc7c44ba4fba87c33c800fee20/library/lua/client/ISUI/ISUIElement.lua
+[u9]: https://github.com/PZ-Umbrella/Umbrella/blob/98f50ae698aab1dc7c44ba4fba87c33c800fee20/library/java/zombie/audio/BaseSoundEmitter.lua
 [j1]: https://projectzomboid.com/modding/zombie/iso/objects/IsoWindow.html
 [j2]: https://projectzomboid.com/modding/zombie/iso/LosUtil.html
 [j3]: https://projectzomboid.com/modding/zombie/iso/LosUtil.TestResults.html
