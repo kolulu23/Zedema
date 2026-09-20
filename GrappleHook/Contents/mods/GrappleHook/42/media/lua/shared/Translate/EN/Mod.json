@@ -1,4 +1,0 @@
-{
-    "name": "Grapple Hook",
-    "description": "Fire a grapple at a window on a higher floor to tie a climbable escape rope to it.<BR>Equip the grapple hook, put the cursor on the window one or two floors up and left-click. The reticle turns green when the shot is valid.<BR>Ropes are the ammunition: the same number the vanilla escape-rope rule spends for that drop, so a second-floor window costs two ropes (and a nail, if you carry one).<BR>A closed, intact window is smashed by the hook first, exactly as the engine requires before it accepts a rope. Barricaded windows are refused."
-}

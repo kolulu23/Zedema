@@ -1,7 +1,0 @@
-id=grappleHook
-name=Grapple Hook
-author=kolulu
-description=A handheld grapple launcher. Aim at a window on a higher floor and fire: the hook breaks a closed window if it has to, then ties a climbable rope to it. Ropes are the ammunition.
-versionMin=42.20
-modversion=0.1.0
-poster=poster.png

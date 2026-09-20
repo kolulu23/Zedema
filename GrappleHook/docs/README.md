@@ -1,6 +1,7 @@
 # Grapple Hook documentation
 
-Design baseline: 2026-09-20. Status: **specified, not implemented or runtime-certified**.
+Design baseline: 2026-09-20. Status: **design-only; no runtime implementation or
+executable test suite is present**.
 
 | Document | Purpose |
 | --- | --- |
@@ -19,9 +20,27 @@ be assumed about Project Zomboid. `implementation-plan.md` orders the work;
 an unresolved engine contract.
 
 Implement from these requirements, verified engine references, and new behavioral
-fixtures. Do not import an existing implementation, copy its tests as an oracle,
+fixtures. Do not import a historical implementation, copy its tests as an oracle,
 or write a file-by-file repair plan. No compatibility shims, attack passthrough,
 or parallel deployment mechanisms are part of this design.
+
+The superseded runtime, its tests and the superseded ADR are absent from this
+working tree. There is no retained legacy package or executable test runner.
+Historical material remains in Git history only. The current design review records
+rejected approaches; it does not provide an alternative implementation design.
+
+## Core testing before custom artwork
+
+P0 engine probes and the fresh P2 item shell may use verified vanilla presentation
+resources while preserving `Base.GrappleHook` as the item identity and a non-combat
+item class. Item registration/equipment and the real gameplay path still need to
+be tested; borrowing a model does not bypass those checks.
+
+Custom-asset production and its asset-specific release gates are not prerequisites
+for starting core-logic integration tests. Keep custom sound, hook flight and custom
+animation disabled until their own contracts are verified. Record core-engine and
+custom-asset results separately; a placeholder model pass is not a custom-model
+pass. No placeholder item is supplied by this cleanup.
 
 `custom-assets.md` specifies the art-production workflow and presentation boundary.
 Its script examples are staging templates, not runtime-certified definitions.
@@ -29,10 +48,14 @@ Custom held/ground models and readable feedback belong to the release pipeline;
 custom skeletal clips, transient hook flight and remote custom effects have separate
 scope/evidence requirements. Cosmetic playback never authorizes a deployment.
 
-The [first ADR](adr/0001-grapple-hook.md) is a supersession marker, not additional
-implementation guidance. Git history retains previous documentation; there is
-only one active design.
+## Repository and verification status
 
-This change is documentation only. No game, multiplayer, performance, or runtime
-test result is asserted by these documents. Proposed limits and timings are
-initial design values, not benchmark measurements.
+The package layouts, artwork paths and implementation modules in these documents
+are proposed output. They must be created from the active plan before deploying.
+Removing repository files does not uninstall a previously deployed game copy;
+see [the mod README](../README.md) before testing a replacement.
+
+No game, multiplayer, performance, or runtime test result is asserted by this
+cleanup. Proposed limits and timings are initial design values, not benchmark
+measurements. Acceptance scenarios remain requirements until execution evidence
+is recorded.

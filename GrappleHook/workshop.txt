@@ -1,8 +1,0 @@
-version=1
-title=Grapple Hook
-description=[h2]Grapple a window upstairs and climb up with a rope.[/h2]
-description=
-description=
-description=
-tags=Build 42;
-visibility=private
